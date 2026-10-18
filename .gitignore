@@ -1,0 +1,21 @@
+# Secrets & local config (env lives in ~/.config/chat-center.env)
+.env
+.env.*
+!.env.example
+
+# Runtime data (SQLite DB, uploads, backups)
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+uploads/
+
+# Dependencies & tooling
+node_modules/
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+*.swp
+*~

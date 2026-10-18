@@ -1,0 +1,139 @@
+// Single local server for Chat Center: serves the static HTML and proxies
+// /v1/* to the Openclaw Gateway. One port, one origin — used both locally
+// and as the target behind the agents.herrygunawan.com tunnel.
+//
+// Hardening (2026-09-24) — before this was exposed publicly:
+//   1. The gateway token no longer ships to the browser. It is read from the
+//      environment (GATEWAY_TOKEN) and injected on the proxy hop only.
+//   2. HTTP Basic auth gate (CHAT_USER / CHAT_PASS) + a signed session cookie,
+//      because the client sets its own Authorization header on fetch().
+// Env is supplied by systemd via /home/hg/.config/chat-center.env
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+const GATEWAY = 'http://127.0.0.1:18789';
+const PORT = Number(process.env.CHAT_PORT || 8643);
+const ROOT = __dirname;
+
+const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || '';
+const CHAT_USER = process.env.CHAT_USER || '';
+const CHAT_PASS = process.env.CHAT_PASS || '';
+const SECRET = process.env.CHAT_SECRET || crypto.randomBytes(32).toString('hex');
+const COOKIE_NAME = 'chatcenter_auth';
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
+
+function safeEqual(a, b) {
+  const ba = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
+
+function sessionValue() {
+  return crypto.createHmac('sha256', SECRET).update(CHAT_USER + '\u0000' + CHAT_PASS).digest('hex');
+}
+
+function getCookie(req, name) {
+  const raw = req.headers.cookie || '';
+  for (const part of raw.split(';')) {
+    const i = part.indexOf('=');
+    if (i === -1) continue;
+    if (part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return null;
+}
+
+function isAuthorized(req) {
+  if (!CHAT_USER || !CHAT_PASS) return true; // auth disabled (local dev only)
+
+  const hdr = req.headers.authorization || '';
+  if (hdr.slice(0, 6).toLowerCase() === 'basic ') {
+    const decoded = Buffer.from(hdr.slice(6), 'base64').toString('utf8');
+    const i = decoded.indexOf(':');
+    if (i !== -1) {
+      const u = decoded.slice(0, i);
+      const p = decoded.slice(i + 1);
+      if (safeEqual(u, CHAT_USER) && safeEqual(p, CHAT_PASS)) return true;
+    }
+  }
+
+  const cookie = getCookie(req, COOKIE_NAME);
+  if (cookie && safeEqual(cookie, sessionValue())) return true;
+  return false;
+}
+
+// Blank the client-side gateway token and drop the explicit Authorization
+// header so the browser falls back to Basic auth (same-origin) and the server
+// injects the real token upstream.
+function patchHtml(buf) {
+  let s = buf.toString('utf8');
+  s = s.replace(
+    /const OPENCLAW_TOKEN = '[^']*';/,
+    "const OPENCLAW_TOKEN = ''; // injected server-side by server.js — do not put secrets here"
+  );
+  s = s.replace(/^[ \t]*'Authorization': 'Bearer ' \+ OPENCLAW_TOKEN,[ \t]*\r?\n/m, '');
+  return Buffer.from(s, 'utf8');
+}
+
+const server = http.createServer((req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  if (!isAuthorized(req)) {
+    res.writeHead(401, {
+      'WWW-Authenticate': 'Basic realm="Chat Center", charset="UTF-8"',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store'
+    });
+    res.end('Authentication required');
+    return;
+  }
+
+  // Keep the browser authenticated for JS fetch() calls to /v1/*.
+  const secure = (req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+  res.setHeader(
+    'Set-Cookie',
+    `${COOKIE_NAME}=${sessionValue()}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE}` + (secure ? '; Secure' : '')
+  );
+
+  if (req.url.startsWith('/v1/')) {
+    const target = new URL(req.url, GATEWAY);
+    const headers = { ...req.headers, host: target.host };
+    // Never trust the client's Authorization: replace it with the server-side token.
+    if (GATEWAY_TOKEN) headers.authorization = 'Bearer ' + GATEWAY_TOKEN;
+    const upstream = http.request(target, { method: req.method, headers }, (upstreamRes) => {
+      res.writeHead(upstreamRes.statusCode, upstreamRes.headers);
+      upstreamRes.pipe(res);
+    });
+    upstream.on('error', (err) => {
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Proxy error: ' + err.message }));
+    });
+    req.pipe(upstream);
+    return;
+  }
+
+  const urlPath = req.url === '/' ? '/hg-chat-ai-agent.html' : req.url.split('?')[0];
+  const filePath = path.join(ROOT, urlPath);
+  if (!filePath.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
+  fs.readFile(filePath, (err, data) => {
+    if (err) { res.writeHead(404); res.end('Not found'); return; }
+    const ext = path.extname(filePath);
+    if (ext === '.html') data = patchHtml(data);
+    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    res.end(data);
+  });
+}).listen(PORT, '127.0.0.1', () => {
+  console.log(`Chat Center server running at http://127.0.0.1:${PORT} (proxying /v1/* -> ${GATEWAY})`);
+});
