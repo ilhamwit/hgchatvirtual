@@ -46,9 +46,9 @@ Keputusan pemilik (2026-10-19, menyetujui usulan):
 
 ### Tahap 2 — agent ikut diskusi
 
-- [ ] **T-072** @Dave/@Nana… di channel → agent menjawab di utas dengan konteks percakapan terakhir.
-- [ ] **T-073** "Ringkas diskusi" oleh Aurix untuk rentang waktu.
-- [ ] **T-074** Dari pesan: Jadikan tugas (Task Focus) / Buat acara (Schedule).
+- [x] **T-072** @Dave/@Nana… di channel → agent menjawab di utas dengan konteks percakapan terakhir.
+- [x] **T-073** "Ringkas diskusi" oleh Aurix untuk rentang waktu.
+- [x] **T-074** Dari pesan: Jadikan tugas (Task Focus) / Buat acara (Schedule).
 
 ### Tahap 3 — notifikasi
 
@@ -74,6 +74,7 @@ Keputusan pemilik (2026-10-19, menyetujui usulan):
 - 2026-10-19 Epic dibuat; pemilik menyetujui usulan (empat keputusan di atas) — on-progress
 - 2026-10-19 Tahap 1 selesai (T-067…T-071). Skema v7: `rooms` (channel/dm), `room_members` (dm), `room_messages` (utas, lampiran, edit/hapus lunak), `room_mentions`, `room_reads`; `#umum` dibuat oleh migrasi. `lib/rooms.js` + `lib/hub.js` (SSE `/api/stream`: pesan/edit/hapus/channel/baca/presence; DM hanya ke dua anggota; heartbeat 25 dtk memeriksa sesi → logout menutup stream). `/api/files` juga melayani lampiran di ruang yang boleh dilihat user. UI `#discuss`: channel + DM (online, belum dibaca, @), pesan per hari & dikelompokkan per pengirim, utas di panel kanan, @sebut dengan saran nama (↑↓ Enter), lampiran + penampil, edit/hapus pesan sendiri, buat channel, ubah topik; badge sidebar real-time di semua halaman. Tes 103/103 (5 baru termasuk stream dua-arah + privasi DM, 1 UI), gates PASS. Screenshot sandbox dengan dua browser terpisah: pesan Irfan muncul di layar Ilham tanpa refresh, badge "@7" turun saat dibaca.
 - 2026-10-19 Restart oleh agent: PID 461690 → 793962, gates PASS, `/healthz` ok, skema v7 — live. Belum terverifikasi: stream real-time lewat Cloudflare dengan dua akun asli (perlu login; QA pemilik).
+- 2026-10-19 Tahap 2 selesai (T-072…T-074). Skema v8: `room_messages.agent_id`. @dave/@jaden/@joel/@dylan/@nana (daftar `CHAT_AGENTS`, maks 3 per pesan) → agent menjawab di utas pesan itu; konteks = utas (atau 25 pesan terakhir channel) dengan nama, waktu, dan path lampiran; sesi Hermes `room-<ruang>-<pesan>-<agent>`; indikator "sedang menulis jawaban" lewat stream; jawaban menyebut si penanya (dapat @); gagal → pesan ⚠️ dari agent. Di DM juga bisa, tetap hanya untuk kedua anggota. "✨ Ringkas" (24 jam/7/30 hari) oleh Aurix sebagai job latar (di-poll), hanya terlihat oleh peminta, bisa "Bagikan" sebagai pesan Aurix (sekali). Aksi pesan ✅ Jadikan tugas (judul baris pertama, penanggung jawab = orang yang disebut, catatan = sumber pesan) dan 🗓️ Buat acara (form Schedule terisi). Tes 108/108 (4 baru + 1 UI), gates PASS, screenshot sandbox (indikator mengetik, jawaban Dave di utas, dialog ringkasan, form tugas, form acara).
 
 ## Dependencies
 

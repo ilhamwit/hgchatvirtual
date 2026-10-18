@@ -90,3 +90,14 @@ test('Chat & Discussion opens #discuss and listens to /api/stream', () => {
   assert.match(js, /new EventSource\('\/api\/stream'\)/);
   assert.match(js, /meReady\.then\(\(\) => \{ dsConnect\(\); dsRefreshSoon\(\); \}\);/, 'the badge is live on every page');
 });
+
+// EPIC-012 stage 2: agents in discussions, summaries, message -> task / event.
+test('discussion stage 2 is wired: @agents, Ringkas, task and event from a message', () => {
+  assert.match(js, /\.\.\.AGENTS\.filter\(\(a\) => match\(a\.id, a\.name\)\)/, 'agents are suggested after @');
+  assert.match(js, /ev\.type === 'typing'/);
+  assert.match(js, /onclick="dsSummary\(\)"/);
+  assert.match(js, /api\('POST', `\/api\/rooms\/\$\{ds\.cur\.id\}\/summary`/);
+  assert.match(js, /onclick="dsToTask\(\$\{m\.id\}\)"/);
+  assert.match(js, /onclick="dsToEvent\(\$\{m\.id\}\)"/);
+  assert.match(js, /if \(schPrefill\) schNew\(\);/, 'Schedule opens the form prefilled');
+});

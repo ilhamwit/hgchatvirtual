@@ -151,3 +151,78 @@ test('live stream: channel to all, DM to its members only, presence, ends at log
     await srv.stop();
   }
 });
+
+// ── Stage 2: agents in the discussion, summaries ──
+function setupAgents(reply = () => 'Jawaban agent') {
+  const base = setup();
+  const prompts = [];
+  const gateway = { ask: async (o) => { prompts.push(o); return reply(o); } };
+  const events = [];
+  const rooms = createRooms({ db: base.db, gateway, agents: ['dave', 'nana'], now: () => Date.now(), publish: (e, ids) => events.push([e, ids]) });
+  return { ...base, rooms, prompts, events };
+}
+const settle = () => new Promise((r) => setTimeout(r, 20));
+
+test('@agent answers in the thread with the conversation as context', async () => {
+  const { rooms, ilham, irfan, prompts, events } = setupAgents();
+  const umum = rooms.list(ilham)[0].id;
+  rooms.post(irfan, umum, { body: 'Penjualan Surabaya naik 12%' });
+  const q = rooms.post(ilham, umum, { body: '@dave @nana @siapa tolong rangkum angka di atas' });
+  await settle();
+  assert.deepStrictEqual(prompts.map((p) => p.agentId).sort(), ['dave', 'nana'], 'only real agents, each once');
+  const p = prompts.find((x) => x.agentId === 'dave');
+  assert.strictEqual(p.conversationId, `room-${umum}-${q.id}-dave`);
+  assert.match(p.text, /channel #umum\] Ilham \(@ilham\) memanggil kamu \(@dave\)/);
+  assert.match(p.text, /Irfan: Penjualan Surabaya naik 12%[\s\S]*Ilham: @dave @nana/, 'earlier messages are context');
+  const thread = rooms.messages(ilham, umum, { parentId: q.id });
+  assert.deepStrictEqual(thread.messages.map((m) => [m.agent, m.author, m.body, m.mentions]).sort(),
+    [['dave', null, 'Jawaban agent', ['ilham']], ['nana', null, 'Jawaban agent', ['ilham']]], 'answers in the thread, telling the asker');
+  const typing = events.filter(([e]) => e.type === 'typing' && e.agentId === 'dave').map(([e]) => [e.parentId, e.on]);
+  assert.deepStrictEqual(typing, [[q.id, true], [q.id, false]]);
+  assert.strictEqual(rooms.list(ilham)[0].mentions, 2, 'the asker gets an @ for each answer');
+});
+
+test('in a thread the agent reads the thread; a failing agent says so', async () => {
+  const { rooms, ilham, irfan, prompts } = setupAgents((o) => { if (o.agentId === 'nana') throw new Error('Hermes error 500'); return 'ok'; });
+  const umum = rooms.list(ilham)[0].id;
+  const root = rooms.post(irfan, umum, { body: 'Budget event Desember?' });
+  rooms.post(irfan, umum, { body: 'di luar utas' });
+  rooms.post(ilham, umum, { body: 'Kira-kira 50 juta', parentId: root.id });
+  const q = rooms.post(ilham, umum, { body: '@nana cukup tidak?', parentId: root.id });
+  await settle();
+  assert.match(prompts[0].text, /Budget event Desember\?[\s\S]*Kira-kira 50 juta[\s\S]*@nana cukup tidak\?/);
+  assert.doesNotMatch(prompts[0].text, /di luar utas/);
+  const last = rooms.messages(ilham, umum, { parentId: root.id }).messages.at(-1);
+  assert.deepStrictEqual([last.agent, last.parentId, last.body], ['nana', root.id, '⚠️ Maaf, saya tidak bisa menjawab sekarang (Hermes error 500)']);
+  assert.ok(q.id < last.id);
+});
+
+test('an agent in a DM only reaches its two members', async () => {
+  const { rooms, ilham, cahyo, events } = setupAgents();
+  const dm = rooms.openDm(ilham, 'cahyo');
+  rooms.post(ilham, dm.id, { body: '@dave bantu jawab' });
+  await settle();
+  const sent = events.filter(([e]) => e.type === 'message' && e.message.agent === 'dave');
+  assert.deepStrictEqual(sent.map(([, ids]) => ids), [[1, 3]]);
+  assert.strictEqual(rooms.messages(cahyo, dm.id).messages[0].replies, 1);
+});
+
+test('Ringkas diskusi: Aurix summarizes a range; only the asker sees and shares it', async () => {
+  const { rooms, ilham, irfan, prompts } = setupAgents(() => '*Topik utama*\n- target Q4');
+  const umum = rooms.list(ilham)[0].id;
+  assert.throws(() => rooms.summarize(ilham, umum, { days: 7 }), /tidak ada pesan/);
+  const root = rooms.post(irfan, umum, { body: 'Target Q4 Surabaya 1,5 M' });
+  rooms.post(ilham, umum, { body: 'Setuju', parentId: root.id });
+  assert.throws(() => rooms.summarize(ilham, umum, { days: 3 }), (e) => e.status === 400);
+  const job = rooms.summarize(ilham, umum, { days: 7 });
+  assert.deepStrictEqual([job.status, job.count, job.label, job.agent], ['running', 2, '7 hari terakhir', 'aurix']);
+  await settle();
+  assert.strictEqual(prompts[0].agentId, 'aurix');
+  assert.match(prompts[0].text, /Irfan: Target Q4 Surabaya 1,5 M\n  ↳ \[[^\]]+\] Ilham: Setuju/, 'replies under their parent');
+  assert.deepStrictEqual([rooms.getSummary(ilham, job.id).status, rooms.getSummary(ilham, job.id).content], ['done', '*Topik utama*\n- target Q4']);
+  assert.throws(() => rooms.getSummary(irfan, job.id), (e) => e.status === 404);
+  const shared = rooms.shareSummary(ilham, job.id);
+  assert.deepStrictEqual([shared.agent, shared.parentId], ['aurix', null]);
+  assert.match(shared.body, /^\*\*Ringkasan 7 hari terakhir\*\* — diminta @ilham\n\n\*Topik utama\*/);
+  assert.throws(() => rooms.shareSummary(ilham, job.id), (e) => e.status === 409);
+});
