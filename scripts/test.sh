@@ -18,7 +18,7 @@ echo "==> Boot smoke"
 port=$(node -e 'const s=require("net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')
 media="$(mktemp -d)"; log="$(mktemp)"
 # Run with an empty environment for auth/gateway so nothing real is reachable.
-env -i PATH="$PATH" HOME="$media" CHAT_PORT="$port" CHAT_MEDIA_DIR="$media" \
+env -i PATH="$PATH" HOME="$media" CHAT_DEV=1 CHAT_PORT="$port" CHAT_MEDIA_DIR="$media" \
   node server.js >"$log" 2>&1 &
 pid=$!
 trap 'kill $pid 2>/dev/null || true; rm -rf "$media" "$log"' EXIT

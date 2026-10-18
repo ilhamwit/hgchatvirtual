@@ -17,6 +17,10 @@ it stops being true. Durable decisions also go in the owning epic's Automation L
 - Attachments are written to `~/.openclaw/media/inbound` and handed to the agent
   as an absolute path.
 - Node v26.8.1 on the host: `node:sqlite` and `node:test` are available.
+- Only `public/` is served over HTTP. `server.js` refuses to start without
+  `GATEWAY_TOKEN`, `CHAT_USER`, `CHAT_PASS`, `CHAT_SECRET` unless `CHAT_DEV=1`.
+  `npm run dev` = dev instance on :8650 with data in `data/dev/`.
+- `npm run gates` runs qa + test (unit + boot smoke) + security.
 
 ## Decisions
 

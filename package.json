@@ -1,0 +1,16 @@
+{
+  "name": "hg-chat-center",
+  "version": "1.1.0",
+  "private": true,
+  "description": "HG Chat AI Agent — team chat UI for the OpenClaw agents (agents.herrygunawan.com)",
+  "main": "server.js",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "bash scripts/dev.sh",
+    "test": "node --test test/",
+    "gates": "bash scripts/qa.sh && bash scripts/test.sh && bash scripts/security-check.sh"
+  }
+}

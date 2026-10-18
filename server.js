@@ -14,8 +14,34 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 
+// Fail fast on bad config. Production (systemd) must provide every secret;
+// CHAT_DEV=1 is the explicit opt-out for local runs, where auth is disabled
+// and a throwaway cookie secret is generated. See .env.example.
+const DEV = process.env.CHAT_DEV === '1';
+const REQUIRED_ENV = ['GATEWAY_TOKEN', 'CHAT_USER', 'CHAT_PASS', 'CHAT_SECRET'];
+
+function configError(msg) {
+  console.error('Chat Center config error: ' + msg);
+  process.exit(1);
+}
+
+function intEnv(name, fallback, min, max) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < min || n > max) configError(`${name} must be an integer between ${min} and ${max}, got "${raw}"`);
+  return n;
+}
+
+if (!DEV) {
+  const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
+  if (missing.length) {
+    configError(`missing required env ${missing.join(', ')} — set them in ~/.config/chat-center.env, or run with CHAT_DEV=1 for local development`);
+  }
+}
+
 const GATEWAY = 'http://127.0.0.1:18789';
-const PORT = Number(process.env.CHAT_PORT || 8643);
+const PORT = intEnv('CHAT_PORT', 8643, 1, 65535);
 const ROOT = __dirname;
 // Only this directory is reachable over HTTP. Everything else in ROOT (server
 // code, docs, .git, .agentic) stays private.
@@ -41,7 +67,7 @@ const MIME = {
 // Nothing here is ever served back over HTTP — the directory sits outside ROOT.
 const MEDIA_DIR = process.env.CHAT_MEDIA_DIR ||
   path.join(os.homedir(), '.openclaw', 'media', 'inbound');
-const MAX_UPLOAD_BYTES = Number(process.env.CHAT_MAX_UPLOAD_BYTES || 10 * 1024 * 1024);
+const MAX_UPLOAD_BYTES = intEnv('CHAT_MAX_UPLOAD_BYTES', 10 * 1024 * 1024, 1, 1024 * 1024 * 1024);
 const ALLOWED_EXT = new Set([
   'txt','md','csv','tsv','json','yaml','yml','xml','log','ini','conf',
   'pdf','doc','docx','xls','xlsx','ppt','pptx','rtf','odt','ods',
@@ -143,7 +169,7 @@ function getCookie(req, name) {
 }
 
 function isAuthorized(req) {
-  if (!CHAT_USER || !CHAT_PASS) return true; // auth disabled (local dev only)
+  if (DEV && (!CHAT_USER || !CHAT_PASS)) return true; // auth disabled: CHAT_DEV=1 only
 
   const hdr = req.headers.authorization || '';
   if (hdr.slice(0, 6).toLowerCase() === 'basic ') {
@@ -159,19 +185,6 @@ function isAuthorized(req) {
   const cookie = getCookie(req, COOKIE_NAME);
   if (cookie && safeEqual(cookie, sessionValue())) return true;
   return false;
-}
-
-// Blank the client-side gateway token and drop the explicit Authorization
-// header so the browser falls back to Basic auth (same-origin) and the server
-// injects the real token upstream.
-function patchHtml(buf) {
-  let s = buf.toString('utf8');
-  s = s.replace(
-    /const OPENCLAW_TOKEN = '[^']*';/,
-    "const OPENCLAW_TOKEN = ''; // injected server-side by server.js — do not put secrets here"
-  );
-  s = s.replace(/^[ \t]*'Authorization': 'Bearer ' \+ OPENCLAW_TOKEN,[ \t]*\r?\n/m, '');
-  return Buffer.from(s, 'utf8');
 }
 
 function setAuthCookie(req, res) {
@@ -278,7 +291,6 @@ const server = http.createServer((req, res) => {
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404); res.end('Not found'); return; }
     const ext = path.extname(filePath);
-    if (ext === '.html') data = patchHtml(data);
     res.writeHead(200, {
       'Content-Type': MIME[ext] || 'application/octet-stream',
       // Everything here sits behind login: never let Cloudflare or a shared
@@ -290,4 +302,8 @@ const server = http.createServer((req, res) => {
   });
 }).listen(PORT, '127.0.0.1', () => {
   console.log(`Chat Center server running at http://127.0.0.1:${PORT} (proxying /v1/* -> ${GATEWAY})`);
+  if (DEV) {
+    const off = [!(CHAT_USER && CHAT_PASS) && 'login', !GATEWAY_TOKEN && 'gateway token'].filter(Boolean);
+    console.log('CHAT_DEV=1: development mode' + (off.length ? ` (no ${off.join(', no ')})` : ''));
+  }
 });
