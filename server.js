@@ -20,6 +20,7 @@ const { createGateway, DEFAULT_URL: DEFAULT_GATEWAY_URL } = require('./lib/gatew
 const { createApi } = require('./lib/api');
 const { createWhatsApp } = require('./lib/whatsapp');
 const { createWaArchive } = require('./lib/wa-archive');
+const { createSchedule } = require('./lib/schedule');
 
 // Fail fast on bad config. Production (systemd) must provide the Hermes
 // API key; CHAT_DEV=1 is the explicit opt-out for local UI work. See .env.example.
@@ -114,7 +115,9 @@ const api = createApi({
   mediaDir: MEDIA_DIR,
   whatsapp,
   // Group reading + summaries from Hermes' WhatsApp group archive (read only).
-  waArchive: createWaArchive({ db, gateway })
+  waArchive: createWaArchive({ db, gateway }),
+  // Agent schedules from Hermes' cron files (read only).
+  schedule: createSchedule({ db })
 });
 
 // Keep only a basename, and only characters that are safe in a shell argument

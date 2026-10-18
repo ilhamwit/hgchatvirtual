@@ -675,8 +675,11 @@ function showToast(msg) {
 const WA_PAGES = {
   groups: { title: 'Pilih Group' },
   summary: { title: 'Summary Chat' },
-  connect: { title: 'Koneksikan WA' }
+  connect: { title: 'Koneksikan WA' },
+  // Not WhatsApp, but the same full-width page slot (EPIC-009).
+  schedule: { title: 'Jadwal agent', crumb: 'Schedule', hash: 'schedule' }
 };
+const pageHash = (key) => '#' + (WA_PAGES[key].hash || 'wa-' + key);
 let waPage = null;
 
 function openWaPage(key) {
@@ -686,13 +689,14 @@ function openWaPage(key) {
   closeDrop();
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('on', n.dataset.wa === key));
   document.getElementById('waTitle').textContent = page.title;
+  document.getElementById('waCrumb').textContent = page.crumb || 'WhatsApp';
   document.getElementById('socketsPanel').classList.add('hidden');
   document.querySelector('.chat').classList.add('hidden');
   document.getElementById('waView').classList.remove('hidden');
   closeWaPages();
   for (const [k, p] of Object.entries(WA_IMPL)) document.getElementById(p.el).classList.toggle('hidden', k !== key);
   WA_IMPL[key].open();
-  if (location.hash !== '#wa-' + key) history.replaceState(null, '', '#wa-' + key);
+  if (location.hash !== pageHash(key)) history.replaceState(null, '', pageHash(key));
 }
 
 function showChatView() {
@@ -703,7 +707,7 @@ function showChatView() {
   document.getElementById('socketsPanel').classList.remove('hidden');
   document.querySelector('.chat').classList.remove('hidden');
   document.querySelectorAll('.nav-item[data-wa]').forEach(n => n.classList.remove('on'));
-  if (location.hash.startsWith('#wa-')) history.replaceState(null, '', location.pathname + location.search);
+  if (pageFromHash()) history.replaceState(null, '', location.pathname + location.search);
 }
 
 /* ── Koneksikan WA (EPIC-008 T-042) ───────
@@ -1108,23 +1112,173 @@ function waCloseSummary() {
   document.querySelectorAll('.was-h').forEach((n) => n.classList.remove('on'));
 }
 
+/* ── Schedule (EPIC-009 T-046) ─────────────
+   Jobs Hermes runs on a timer (`hermes cron`), from every agent profile.
+   Read only: what runs, when, where it is sent, and how recent runs went. */
+const sched = { jobs: [], details: {} };
+
+function schedClose() { sched.details = {}; }
+
+function schedAgent(profile) {
+  if (profile === 'default') return 'Hermes utama';
+  const a = AGENTS.find((x) => x.id === profile);
+  return a ? a.name : profile.charAt(0).toUpperCase() + profile.slice(1);
+}
+
+// "Hari ini 03.23", "Besok 09.00", "Kemarin 21.23", else "17 Okt 08.00".
+function schedWhen(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso);
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(d) - day(new Date())) / 86400000);
+  const label = { 0: 'Hari ini', 1: 'Besok', [-1]: 'Kemarin' }[diff]
+    || d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
+  return label + ' ' + waClock(d);
+}
+
+// "dalam 2 jam" / "3 jam lalu".
+function schedRel(iso) {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (!iso || isNaN(ms)) return '';
+  const a = Math.abs(ms) / 60000;
+  const n = a < 1 ? 'kurang dari 1 menit' : a < 60 ? Math.round(a) + ' menit' : a < 2880 ? Math.round(a / 60) + ' jam' : Math.round(a / 1440) + ' hari';
+  return ms >= 0 ? 'dalam ' + n : n + ' lalu';
+}
+
+function schedDuration(a, b) {
+  const s = Math.round((new Date(b) - new Date(a)) / 1000);
+  if (!a || !b || isNaN(s) || s < 0) return '—';
+  return s < 60 ? s + ' dtk' : Math.floor(s / 60) + ' mnt ' + (s % 60) + ' dtk';
+}
+
+const SCHED_STATUS = { active: ['ok', 'Aktif'], paused: ['warn', 'Dijeda'], error: ['bad', 'Gagal'] };
+const SCHED_RUN = {
+  ok: ['ok', 'Berhasil'], completed: ['ok', 'Berhasil'], success: ['ok', 'Berhasil'],
+  error: ['bad', 'Gagal'], failed: ['bad', 'Gagal'], running: ['warn', 'Berjalan'], claimed: ['warn', 'Mulai']
+};
+function schedRunPill(status) {
+  const [cls, label] = SCHED_RUN[status] || ['warn', status || '—'];
+  return `<span class="wa-pill ${cls}">${escapeHtml(label)}</span>`;
+}
+
+async function schedOpen() {
+  const el = document.getElementById('schedulePage');
+  el.innerHTML = '<div class="wa-grid"><div class="wa-box"><div class="wa-msg"><span class="wa-spin"></span>Memuat jadwal…</div></div></div>';
+  try { sched.jobs = (await api('GET', '/api/schedule/jobs')).jobs; }
+  catch (e) {
+    if (waPage === 'schedule') el.innerHTML = `<div class="wa-grid"><div class="wa-box"><div class="wa-msg err">Gagal memuat jadwal: ${escapeHtml(e.message)}</div></div></div>`;
+    return;
+  }
+  if (waPage !== 'schedule') return;
+  schedRender();
+}
+
+function schedRender() {
+  const el = document.getElementById('schedulePage');
+  const n = sched.jobs.length;
+  const head = `<div class="wa-box sch-head">
+      <div><h3>Jadwal agent</h3>
+        <div class="wa-sub">${n ? n + ' jadwal' : 'Belum ada jadwal'} · dibaca dari cron Hermes (hanya-baca)</div></div>
+      <button class="wa-btn ghost" type="button" onclick="schedOpen()">Muat ulang</button>
+    </div>`;
+  const empty = `<div class="wa-box"><div class="wa-msg">Belum ada pekerjaan terjadwal di Hermes.
+      Jadwal yang dibuat dengan <code>hermes cron create</code> akan muncul di sini.</div></div>`;
+  el.innerHTML = `<div class="wa-grid">${head}${n ? sched.jobs.map(schedCard).join('') : empty}</div>`;
+}
+
+function schedCard(j) {
+  const [cls, label] = SCHED_STATUS[j.status] || ['warn', j.status];
+  const next = j.status === 'paused'
+    ? (j.pausedReason ? 'Dijeda: ' + escapeHtml(j.pausedReason) : 'Dijeda')
+    : j.nextRunAt ? `${escapeHtml(schedWhen(j.nextRunAt))} <span class="sch-rel">${escapeHtml(schedRel(j.nextRunAt))}</span>` : '—';
+  const last = j.lastRunAt
+    ? `${escapeHtml(schedWhen(j.lastRunAt))} ${schedRunPill(j.lastStatus)}`
+    : 'Belum pernah';
+  const runs = j.runsLimit ? `${j.runsCompleted} dari ${j.runsLimit}×` : `${j.runsCompleted}×`;
+  const err = j.lastError
+    ? `<div class="sch-err"><b>Error terakhir${j.failureStreak > 1 ? ` (${j.failureStreak}× berturut-turut)` : ''}:</b> ${escapeHtml(String(j.lastError).slice(0, 400))}</div>` : '';
+  return `<div class="wa-box sch-job" data-profile="${escapeAttr(j.profile)}" data-id="${escapeAttr(j.id)}">
+      <div class="sch-top">
+        <div class="sch-name">${escapeHtml(j.name)}</div>
+        <span class="sch-tag">${escapeHtml(schedAgent(j.profile))}</span>
+        <span class="wa-pill ${cls}">${escapeHtml(label)}</span>
+      </div>
+      <div class="sch-when"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        ${escapeHtml(j.schedule)}${j.scheduleRaw && j.scheduleRaw !== j.schedule ? ` <span class="sch-raw">${escapeHtml(j.scheduleRaw)}</span>` : ''}</div>
+      <dl class="sch-facts">
+        <div><dt>Berikutnya</dt><dd>${next}</dd></div>
+        <div><dt>Terakhir</dt><dd>${last}</dd></div>
+        <div><dt>Kirim ke</dt><dd>${j.deliver ? escapeHtml(j.deliver.label) : 'Tidak dikirim'}</dd></div>
+        <div><dt>Sudah jalan</dt><dd>${escapeHtml(runs)}</dd></div>
+      </dl>
+      ${err}
+      <div class="sch-actions"><button class="wa-btn ghost" type="button" onclick="schedToggle(this)">Lihat detail</button></div>
+      <div class="sch-detail hidden"></div>
+    </div>`;
+}
+
+async function schedToggle(btn) {
+  const card = btn.closest('.sch-job');
+  const box = card.querySelector('.sch-detail');
+  const opening = box.classList.contains('hidden');
+  box.classList.toggle('hidden', !opening);
+  btn.textContent = opening ? 'Tutup detail' : 'Lihat detail';
+  if (!opening) return;
+  const key = card.dataset.profile + '/' + card.dataset.id;
+  box.innerHTML = '<div class="wa-msg"><span class="wa-spin"></span>Memuat riwayat…</div>';
+  try {
+    sched.details[key] = await api('GET', '/api/schedule/jobs/' + encodeURIComponent(card.dataset.profile) + '/' + encodeURIComponent(card.dataset.id));
+  } catch (e) {
+    box.innerHTML = `<div class="wa-msg err">Gagal memuat detail: ${escapeHtml(e.message)}</div>`;
+    return;
+  }
+  box.innerHTML = schedDetail(sched.details[key]);
+}
+
+function schedDetail({ job, runs, output }) {
+  const out = output.latest;
+  const result = out
+    ? `<div class="sch-sec"><div class="sch-sec-h">Hasil terakhir <span>${escapeHtml(schedWhen(out.name.replace(/^(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2}).*/, '$1T$2:$3:$4')))}</span></div>
+        <div class="was-result sch-result">${formatMsg(out.response != null ? out.response : out.text)}</div>
+        ${out.response != null ? `<details class="sch-full"><summary>Tampilkan file lengkap (instruksi + data skrip)</summary><pre>${escapeHtml(out.text)}${out.truncated ? '\n… (dipotong)' : ''}</pre></details>` : ''}
+      </div>`
+    : '<div class="sch-sec"><div class="sch-sec-h">Hasil terakhir</div><div class="wa-msg">Belum ada hasil tersimpan.</div></div>';
+  const rows = runs.map((r) => `<tr><td>${escapeHtml(schedWhen(r.startedAt))}</td><td>${escapeHtml(schedDuration(r.startedAt, r.finishedAt))}</td>
+      <td>${schedRunPill(r.status)}</td><td>${escapeHtml(r.delivery === 'delivered' ? 'Terkirim' : r.delivery || '—')}${r.error ? `<div class="sch-run-err">${escapeHtml(String(r.error).slice(0, 300))}</div>` : ''}</td></tr>`).join('');
+  const history = `<div class="sch-sec"><div class="sch-sec-h">Riwayat run <span>${runs.length ? runs.length + ' terakhir' : ''}</span></div>
+      ${runs.length ? `<table class="sch-runs"><thead><tr><th>Mulai</th><th>Durasi</th><th>Status</th><th>Pengiriman</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="wa-msg">Belum ada run tercatat.</div>'}</div>`;
+  const prompt = job.prompt
+    ? `<div class="sch-sec"><div class="sch-sec-h">Instruksi ke agent</div><div class="sch-prompt">${escapeHtml(job.prompt)}</div></div>` : '';
+  const extra = [
+    job.script ? `<div><dt>Skrip sebelum run</dt><dd><code>${escapeHtml(job.script)}</code></dd></div>` : '',
+    job.skills.length ? `<div><dt>Skill</dt><dd>${job.skills.map((s) => escapeHtml(String(s))).join(', ')}</dd></div>` : '',
+    job.deliver ? `<div><dt>Tujuan (raw)</dt><dd><code>${escapeHtml(job.deliver.platform + ':' + job.deliver.target)}</code></dd></div>` : '',
+    `<div><dt>ID</dt><dd><code>${escapeHtml(job.id)}</code></dd></div>`,
+    job.createdAt ? `<div><dt>Dibuat</dt><dd>${escapeHtml(schedWhen(job.createdAt))}</dd></div>` : ''
+  ].join('');
+  return result + history + prompt + `<div class="sch-sec"><dl class="sch-facts sch-meta">${extra}</dl></div>`;
+}
+
 /* ── Page registry: one container per WhatsApp page ── */
 const WA_IMPL = {
   connect: { el: 'waConnect', open: waConnectOpen, close: waConnectClose },
   groups: { el: 'waGroupsPage', open: waGroupsOpen, close: waGroupsClose },
-  summary: { el: 'waSummaryPage', open: waSummaryOpen, close: waSummaryClose }
+  summary: { el: 'waSummaryPage', open: waSummaryOpen, close: waSummaryClose },
+  schedule: { el: 'schedulePage', open: schedOpen, close: schedClose }
 };
 function closeWaPages() { for (const p of Object.values(WA_IMPL)) p.close(); }
 
-// A reload on #wa-groups (etc.) reopens that page.
+// A reload on #wa-groups, #schedule (etc.) reopens that page.
+function pageFromHash() { return Object.keys(WA_PAGES).find((k) => pageHash(k) === location.hash) || null; }
 function openWaFromHash() {
-  const m = location.hash.match(/^#wa-(\w+)$/);
-  if (m && WA_PAGES[m[1]]) openWaPage(m[1]);
+  const key = pageFromHash();
+  if (key) openWaPage(key);
 }
 
 // Back/forward or an edited address: follow the hash.
 window.addEventListener('hashchange', () => {
-  if (/^#wa-\w+$/.test(location.hash)) openWaFromHash();
+  if (pageFromHash()) openWaFromHash();
   else showChatView();
 });
 

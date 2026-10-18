@@ -31,7 +31,7 @@ test('the WhatsApp view lives in .main next to the chat, hidden at start', () =>
   const main = html.slice(html.indexOf('<div class="main">'));
   assert.ok(main.indexOf('class="chat"') < main.indexOf('id="waView"'));
   assert.match(html, /<div class="wa-view hidden" id="waView">/);
-  assert.match(html, /<span class="wa-crumb">WhatsApp<\/span>/);
+  assert.match(html, /<span class="wa-crumb" id="waCrumb">WhatsApp<\/span>/);
 });
 
 test('chat navigation closes a WhatsApp page; reload on #wa-<page> reopens it', () => {
@@ -41,4 +41,14 @@ test('chat navigation closes a WhatsApp page; reload on #wa-<page> reopens it', 
   for (const fn of ['openWaPage', 'showChatView', 'openWaFromHash']) {
     assert.match(js, new RegExp(`function ${fn}\\(`), fn);
   }
+});
+
+// EPIC-009 T-046: the Schedule item opens the read-only schedule page.
+test('sidebar Schedule opens its own page at #schedule', () => {
+  assert.match(html, /<div class="nav-item" data-wa="schedule" onclick="openWaPage\('schedule'\)">[\s\S]*?<\/span>\s*Schedule\s*<\/div>/);
+  assert.match(js, /\bschedule: \{ title: '[^']+', crumb: 'Schedule', hash: 'schedule' \}/);
+  assert.match(js, /\bschedule: \{ el: 'schedulePage', open: schedOpen, close: schedClose \}/);
+  assert.match(html, /id="schedulePage"/);
+  assert.match(html, /id="waCrumb"/);
+  assert.match(js, /api\('GET', '\/api\/schedule\/jobs'\)/);
 });
