@@ -952,35 +952,82 @@ async function waSummaryOpen() {
   try { waS.groups = (await api('GET', '/api/wa/groups')).groups; }
   catch (e) { el.innerHTML = `<div class="wa-grid"><div class="wa-box"><div class="wa-msg err">Gagal memuat grup: ${escapeHtml(e.message)}</div></div></div>`; return; }
   if (waPage !== 'summary') return;
-  const today = new Date();
-  const weekAgo = new Date(); weekAgo.setDate(today.getDate() - 6);
-  const opts = waS.groups.map((g) => `<option value="${escapeAttr(g.id)}">${escapeHtml(waGroupName(g))} (${g.messageCount} pesan)</option>`).join('');
+  if (!waS.groups.length) {
+    el.innerHTML = '<div class="wa-grid"><div class="wa-box"><h3>Buat ringkasan percakapan grup</h3><div class="wa-msg">Belum ada grup di arsip. Grup muncul setelah ada pesan pertama sejak arsip aktif.</div></div></div>';
+    return;
+  }
+  const today = waIsoDay(new Date());
+  const opts = waS.groups.map((g) => `<option value="${escapeAttr(g.id)}">${escapeHtml(waGroupName(g))}</option>`).join('');
   const agentOpts = AGENTS.map((a) => `<option value="${a.id}"${a.id === 'dave' ? ' selected' : ''}>${escapeHtml(a.name)} — ${escapeHtml(a.role)}</option>`).join('');
   el.innerHTML = `<div class="wa-grid">
-    <div class="wa-box"><h3>Buat ringkasan percakapan grup</h3>
-      ${waS.groups.length ? `<div class="was-form">
-        <label>Grup<select id="wasGroup" onchange="waSummaryGroupChanged()">${opts}</select></label>
-        <label>Dari<input type="date" id="wasFrom" value="${waIsoDay(weekAgo)}" max="${waIsoDay(today)}"></label>
-        <label>Sampai<input type="date" id="wasTo" value="${waIsoDay(today)}" max="${waIsoDay(today)}"></label>
+    <div class="wa-box">
+      <h3>Buat ringkasan percakapan grup</h3>
+      <div class="was-form">
+        <label class="was-wide">Grup
+          <select id="wasGroup" onchange="waSummaryGroupChanged()">${opts}</select>
+          <span class="was-sub" id="wasGroupInfo"></span>
+        </label>
+        <label>Dari<input type="date" id="wasFrom" max="${today}" onchange="waMarkRange()"></label>
+        <label>Sampai<input type="date" id="wasTo" value="${today}" max="${today}" onchange="waMarkRange()"></label>
         <label>Agent<select id="wasAgent">${agentOpts}</select></label>
+      </div>
+      <div class="was-actions">
+        <div class="was-chips" role="group" aria-label="Rentang cepat">
+          <button type="button" data-days="1" onclick="waQuickRange(1)">Hari ini</button>
+          <button type="button" data-days="7" onclick="waQuickRange(7)">7 hari</button>
+          <button type="button" data-days="30" onclick="waQuickRange(30)">30 hari</button>
+        </div>
         <button class="wa-btn primary" type="button" id="wasGo" onclick="waCreateSummary()">Buat ringkasan</button>
-      </div><div class="was-hint" id="wasHint"></div>` : '<div class="wa-msg">Belum ada grup di arsip. Grup muncul setelah ada pesan pertama sejak arsip aktif.</div>'}
+      </div>
+      <p class="was-note">${escapeHtml(WA_LIMITS_NOTE)}</p>
     </div>
-    <div class="wa-box hidden" id="wasResultBox"><h3>Hasil</h3><div id="wasResult"></div></div>
+    <div class="wa-box hidden" id="wasResultBox">
+      <div class="was-res-head"><h3>Hasil ringkasan</h3>
+        <button class="wa-btn ghost" type="button" id="wasCopy" onclick="waCopySummary()">Salin</button>
+        <button class="wa-btn ghost" type="button" onclick="waCloseSummary()">Tutup</button></div>
+      <div id="wasResult"></div>
+    </div>
     <div class="wa-box"><h3>Riwayat ringkasan</h3><div class="was-hist" id="wasHist"><div class="wa-msg">—</div></div></div>
   </div>`;
-  if (waS.groups.length) waSummaryGroupChanged();
+  waQuickRange(7);
+  waSummaryGroupChanged();
 }
 
 function waSummaryClose() { clearTimeout(waS.timer); waS.timer = null; }
 
+// "Hari ini" / "7 hari" / "30 hari": both ends inclusive, ending today.
+function waQuickRange(days) {
+  const from = new Date(); from.setDate(from.getDate() - (days - 1));
+  document.getElementById('wasFrom').value = waIsoDay(from);
+  document.getElementById('wasTo').value = waIsoDay(new Date());
+  waMarkRange();
+}
+
+// Highlights the quick-range chip that matches the chosen dates, if any.
+function waMarkRange() {
+  const from = document.getElementById('wasFrom').value;
+  const to = document.getElementById('wasTo').value;
+  const today = waIsoDay(new Date());
+  document.querySelectorAll('.was-chips button').forEach((b) => {
+    const d = new Date(); d.setDate(d.getDate() - (Number(b.dataset.days) - 1));
+    b.classList.toggle('on', to === today && from === waIsoDay(d));
+  });
+}
+
 function waSummaryGroupChanged() {
   const g = waS.groups.find((x) => x.id === document.getElementById('wasGroup').value);
-  document.getElementById('wasHint').textContent = g
-    ? 'Data grup ini tersedia sejak ' + waDay(g.firstTs) + '. ' + WA_LIMITS_NOTE
+  document.getElementById('wasGroupInfo').textContent = g
+    ? `${g.messageCount} pesan · data sejak ${new Date(g.firstTs).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`
+      + (g.participants ? ` · ${g.participants} anggota` : '')
     : '';
   waLoadSummaryHistory();
 }
+
+const WA_STATUS = {
+  done: ['ok', 'Selesai'], running: ['run', 'Diproses'], error: ['bad', 'Gagal']
+};
+
+function waAgentName(id) { return (AGENTS.find((a) => a.id === id) || { name: id }).name; }
 
 async function waLoadSummaryHistory() {
   const chatId = document.getElementById('wasGroup').value;
@@ -988,18 +1035,21 @@ async function waLoadSummaryHistory() {
   try { list = (await api('GET', '/api/wa/summaries?chatId=' + encodeURIComponent(chatId))).summaries; } catch (e) { /* keep empty */ }
   if (waPage !== 'summary' || document.getElementById('wasGroup').value !== chatId) return;
   const el = document.getElementById('wasHist');
-  if (!list.length) { el.innerHTML = '<div class="wa-msg">Belum ada ringkasan untuk grup ini.</div>'; return; }
+  if (!list.length) { el.innerHTML = '<div class="was-empty">Belum ada ringkasan untuk grup ini.</div>'; return; }
   el.innerHTML = list.map((s) => {
-    const agent = (AGENTS.find((a) => a.id === s.agentId) || { name: s.agentId }).name;
-    const st = s.status === 'done' ? '✓ selesai' : s.status === 'running' ? '⏳ diproses' : '⚠️ gagal';
-    return `<div class="was-h${waS.current === s.id ? ' on' : ''}" onclick="waShowSummary(${s.id})"><b>${escapeHtml(s.from)} → ${escapeHtml(s.to)}</b>
-      <span>${s.messageCount} pesan · ${escapeHtml(agent)} · oleh ${escapeHtml(s.by || '-')}</span><span class="st">${st}</span></div>`;
+    const [cls, label] = WA_STATUS[s.status] || ['bad', s.status];
+    const range = s.from === s.to ? s.from : `${s.from} → ${s.to}`;
+    return `<button type="button" class="was-h${waS.current === s.id ? ' on' : ''}" onclick="waShowSummary(${s.id})">
+      <span class="was-h-main"><b>${escapeHtml(range)}</b>
+        <span class="was-h-meta">${s.messageCount} pesan · ${escapeHtml(waAgentName(s.agentId))} · oleh ${escapeHtml(s.by || '-')} · ${fmtTime(s.createdAt)}</span></span>
+      <span class="was-pill ${cls}">${label}</span><span class="was-chev" aria-hidden="true">›</span></button>`;
   }).join('');
 }
 
 async function waCreateSummary() {
   const btn = document.getElementById('wasGo');
   btn.disabled = true;
+  btn.textContent = 'Mengirim…';
   try {
     const r = await api('POST', '/api/wa/summaries', {
       chatId: document.getElementById('wasGroup').value,
@@ -1013,6 +1063,7 @@ async function waCreateSummary() {
     showToast('⚠️ ' + e.message);
   } finally {
     btn.disabled = false;
+    btn.textContent = 'Buat ringkasan';
   }
 }
 
@@ -1022,18 +1073,37 @@ async function waShowSummary(id) {
   let s;
   try { s = (await api('GET', '/api/wa/summaries/' + id)).summary; } catch (e) { showToast('⚠️ ' + e.message); return; }
   if (waPage !== 'summary' || waS.current !== id) return;
+  waS.shown = s;
   const box = document.getElementById('wasResultBox');
   box.classList.remove('hidden');
   const g = waS.groups.find((x) => x.id === s.chatId);
-  const agent = (AGENTS.find((a) => a.id === s.agentId) || { name: s.agentId }).name;
-  const meta = `<div class="was-meta">${escapeHtml(g ? waGroupName(g) : s.chatId)} · ${escapeHtml(s.from)} → ${escapeHtml(s.to)} · ${s.messageCount} pesan · ${escapeHtml(agent)} · oleh ${escapeHtml(s.by || '-')}</div>`;
+  const agent = waAgentName(s.agentId);
+  const [cls, label] = WA_STATUS[s.status] || ['bad', s.status];
+  const range = s.from === s.to ? s.from : `${s.from} → ${s.to}`;
+  const meta = `<div class="was-meta"><span class="was-pill ${cls}">${label}</span>
+    <span>${escapeHtml(g ? waGroupName(g) : s.chatId)} · ${escapeHtml(range)} · ${s.messageCount} pesan · ${escapeHtml(agent)} · oleh ${escapeHtml(s.by || '-')}</span></div>`;
   const body = s.status === 'done' ? `<div class="was-result">${formatMsg(s.content)}</div>`
     : s.status === 'running' ? `<div class="wa-msg"><span class="wa-spin"></span>${escapeHtml(agent)} sedang meringkas ${s.messageCount} pesan…</div>`
-    : `<div class="wa-msg err">Gagal: ${escapeHtml(s.error || 'tidak diketahui')}</div>`;
+    : `<div class="wa-msg err">${escapeHtml(s.error || 'Gagal, alasan tidak diketahui.')}</div>`;
   document.getElementById('wasResult').innerHTML = meta + body;
+  document.getElementById('wasCopy').classList.toggle('hidden', s.status !== 'done');
   document.querySelectorAll('.was-h').forEach((n) => n.classList.remove('on'));
   if (s.status === 'running') waS.timer = setTimeout(() => waShowSummary(id), 3000);
   else waLoadSummaryHistory();
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function waCopySummary() {
+  const s = waS.shown;
+  if (!s || !s.content || !navigator.clipboard) return;
+  navigator.clipboard.writeText(s.content).then(() => showToast('📋 Ringkasan disalin'), () => {});
+}
+
+function waCloseSummary() {
+  waSummaryClose();
+  waS.current = null;
+  document.getElementById('wasResultBox').classList.add('hidden');
+  document.querySelectorAll('.was-h').forEach((n) => n.classList.remove('on'));
 }
 
 /* ── Page registry: one container per WhatsApp page ── */

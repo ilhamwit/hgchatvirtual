@@ -567,21 +567,38 @@ body{font-family:var(--font);background:var(--dark);color:#fff;}
 .wag-empty{margin:auto;text-align:center;color:#5A5A72;font-size:12.5px;line-height:1.6;padding:24px;}
 
 /* ── Summary Chat (EPIC-008 T-045) ── */
-.was-form{display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:10px;align-items:end;}
-.was-form label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:600;color:#5A5A72;}
-.was-form select,.was-form input{height:36px;border:1px solid #E4E4EE;border-radius:8px;padding:0 10px;font-size:12.5px;font-family:var(--font);color:#111118;background:#fff;}
-.was-hint{font-size:11.5px;color:#9898B2;margin-top:10px;}
+.was-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 12px;}
+.was-form label{display:flex;flex-direction:column;gap:6px;font-size:11.5px;font-weight:600;color:#5A5A72;min-width:0;}
+.was-form .was-wide{grid-column:1 / -1;}
+.was-form select,.was-form input{width:100%;min-width:0;height:38px;border:1px solid #E4E4EE;border-radius:9px;padding:0 10px;font-size:13px;font-family:var(--font);color:#111118;background:#fff;}
+.was-form select:focus,.was-form input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,168,76,.15);}
+.was-sub{font-size:11.5px;font-weight:400;color:#9898B2;}
+.was-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid #F1F1F6;}
+.was-chips{display:flex;gap:6px;flex-wrap:wrap;}
+.was-chips button{height:30px;padding:0 12px;border-radius:16px;border:1px solid #E4E4EE;background:#fff;font-size:12px;font-weight:500;color:#3A3A52;cursor:pointer;font-family:var(--font);}
+.was-chips button:hover{border-color:#C9C9D6;}
+.was-chips button.on{border-color:var(--gold);background:rgba(201,168,76,.12);color:#6B5416;font-weight:600;}
+.was-actions .wa-btn.primary{height:38px;padding:0 20px;white-space:nowrap;}
+.was-note{margin:12px 0 0;font-size:11px;line-height:1.5;color:#9898B2;}
+.was-res-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.was-res-head h3{margin:0;flex:1;}
+.was-res-head .wa-btn{padding:6px 12px;}
+.was-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:#9898B2;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #F1F1F6;}
 .was-result{font-size:13px;line-height:1.65;color:#111118;}
-.was-result h2{font-size:14px;margin:14px 0 6px;}
-.was-result h2:first-child{margin-top:0;}
-.was-meta{font-size:11.5px;color:#9898B2;margin-bottom:12px;}
-.was-hist{display:flex;flex-direction:column;}
-.was-h{display:flex;gap:10px;align-items:center;padding:9px 4px;border-bottom:1px solid #F1F1F6;font-size:12px;color:#3A3A52;cursor:pointer;}
-.was-h:hover{background:#FAFAFC;}
-.was-h.on{background:rgba(201,168,76,.1);}
-.was-h b{color:#111118;}
-.was-h .st{margin-left:auto;font-size:11px;}
-@media (max-width:900px){.was-form{grid-template-columns:1fr 1fr;}}
+.was-hist{display:flex;flex-direction:column;gap:6px;}
+.was-h{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:11px 12px;border:1px solid #EFEFF4;border-radius:10px;background:#fff;cursor:pointer;font-family:var(--font);transition:border-color .12s,background .12s;}
+.was-h:hover{border-color:#D9D9E3;background:#FAFAFC;}
+.was-h.on{border-color:var(--gold);background:rgba(201,168,76,.07);}
+.was-h-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.was-h-main b{font-size:12.5px;color:#111118;}
+.was-h-meta{font-size:11.5px;color:#9898B2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.was-pill{flex-shrink:0;font-size:11px;font-weight:600;padding:3px 9px;border-radius:12px;}
+.was-pill.ok{background:rgba(22,163,74,.1);color:#15803D;}
+.was-pill.run{background:rgba(201,168,76,.15);color:#8A6D1F;}
+.was-pill.bad{background:rgba(220,38,38,.1);color:#B91C1C;}
+.was-chev{color:#C9C9D6;font-size:18px;line-height:1;}
+.was-empty{font-size:12.5px;color:#9898B2;padding:6px 2px;}
+@media (max-width:760px){.was-form{grid-template-columns:1fr;}.was-actions .wa-btn.primary{width:100%;}}
 
 /* Markdown headings in messages and summaries */
 .md-h{font-weight:700;line-height:1.3;margin:12px 0 4px;color:inherit;}
@@ -589,7 +606,6 @@ body{font-family:var(--font);background:var(--dark);color:#fff;}
 h2.md-h{font-size:16px;} h3.md-h{font-size:14px;} h4.md-h,h5.md-h{font-size:13px;}
 .was-result ul,.was-result ol{margin:4px 0 8px;padding-left:20px;}
 .was-result p{margin:4px 0;}
-.was-form .wa-btn{white-space:nowrap;height:36px;}
 
 /* Bot replies + refresh in the group chat (EPIC-008 follow-up) */
 .wag-msg.me{align-self:flex-end;background:#D9FDD3;border-radius:9px 0 9px 9px;}
