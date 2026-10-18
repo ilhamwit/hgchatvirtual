@@ -21,7 +21,7 @@ riwayat tersimpan di server, dan agent yang benar-benar membantu kerja tim.
 | [EPIC-005](EPIC-005-operations.md)                     | Phase 2 | Operasional: backup, health, log        | P1       | done |
 | [EPIC-006](EPIC-006-team-agents.md)                    | Phase 3 | Agent untuk kerja tim (Backstage dll)   | P2       | backlog |
 | [EPIC-007](EPIC-007-hermes-backend.md)                 | Phase 1 | Backend agent pindah ke Hermes          | P0       | done |
-| [EPIC-008](EPIC-008-whatsapp-agent.md)                 | Phase 2 | Menu WhatsApp Agent (4 submenu)         | P1       | on-progress |
+| [EPIC-008](EPIC-008-whatsapp-agent.md)                 | Phase 2 | Menu WhatsApp (grup, ringkasan, nomor)  | P1       | ready-for-qa |
 
 **Definition of MVP:** selesainya EPIC-000 → EPIC-002.
 

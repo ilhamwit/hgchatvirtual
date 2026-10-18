@@ -1,6 +1,6 @@
-# EPIC-008: WhatsApp Agent
+# EPIC-008: Menu WhatsApp
 
-status: on-progress
+status: ready-for-qa
 environment: dev
 phase: 2
 priority: P1
@@ -12,8 +12,9 @@ tasks: T-041 … T-045
 
 ## Goal
 
-Menu baru **WhatsApp Agent** di sidebar HG Chat, dengan empat bagian:
-Koneksikan WA, Pilih Group, Inbox, dan Summary Chating. Tahap pertama hanya
+Bagian **WhatsApp** di sidebar HG Chat dengan tiga menu langsung (tanpa
+dropdown): Pilih Group, Summary Chat, dan Koneksikan WA. (Awalnya grup
+"WhatsApp Agent" dengan 4 submenu termasuk Inbox; diubah atas permintaan user.) Tahap pertama hanya
 kerangka menu dan halaman placeholder; **detail tiap fitur akan dijelaskan
 user** dan dipecah jadi task setelahnya.
 
@@ -36,8 +37,8 @@ Konteks teknis untuk nanti: Hermes sudah menjalankan WhatsApp bridge
 
 - [x] **T-042** Koneksikan WA — status nomor WhatsApp Hermes + pairing QR dari web ke sesi pending; pemasangan & restart Hermes lewat `scripts/wa-apply.sh` (dijalankan manusia), dengan backup dan rollback.
 - [x] **T-043** Pilih Group — daftar grup dari arsip grup bridge Hermes (nama dari bridge) → chat read-only.
-- [ ] **T-044** Inbox — _detail menyusul._
-- [x] **T-045** Summary Chating — grup + rentang tanggal + agent (default Dave) → ringkasan Markdown oleh agent Hermes, tersimpan dengan riwayat.
+- [x] ~~**T-044** Inbox~~ — dibatalkan oleh user (2026-10-18), menu dihapus.
+- [x] **T-045** Summary Chat — grup + rentang tanggal + agent (default Dave) → ringkasan Markdown oleh agent Hermes, tersimpan dengan riwayat.
 
 ## Acceptance Criteria
 
@@ -61,6 +62,8 @@ Konteks teknis untuk nanti: Hermes sudah menjalankan WhatsApp bridge
 - 2026-10-18 T-043/T-045 implementasi: migrasi 4 (`wa_messages` + unique dedup, `wa_groups`, `wa_archive_state` dengan offset+inode+hash kepala file, `wa_summaries`); `lib/wa-archive.js` (indeks inkremental hanya-baca, baris setengah ditulis ditunda, rotasi aman; nama grup dari bridge di-cache 6 jam; halaman pesan newest-first + hasMore; ringkasan latar belakang via `lib/gateway.js` dengan sesi Hermes `hgchat-wasum-<id>-<n>`, map-reduce per 20k karakter, prompt melarang tool & kirim pesan, maks 92 hari/5000 pesan, satu proses per grup, yang terputus restart ditandai gagal). API `GET /api/wa/groups`, `GET /api/wa/groups/:id/messages`, `GET|POST /api/wa/summaries`, `GET /api/wa/summaries/:id`. UI: daftar grup + chat read-only gaya WhatsApp (pemisah hari, warna pengirim, label media, link, muat lebih lama, refresh 15 dtk); form ringkasan (grup, dari/sampai, agent) + hasil Markdown + riwayat. Renderer Markdown umum diperbaiki: heading `#..####` dan list di tengah blok (juga memperbaiki balasan agent di chat). 7 test baru (temuan: rotasi file bisa memakai ulang inode → ditambah hash kepala file), total 74 PASS; migrasi v3→v4 diuji pada salinan DB production; screenshot dengan data contoh — done
 - 2026-10-18 Tindak lanjut user untuk Pilih Group: (1) `@110935482048547` → ternyata LID bot (mention WhatsApp memakai LID); kini mention diganti nama: bot dari creds.json (me.lid → "Rederp"), anggota lewat `lid-mapping-<lid>_reverse.json` → nomor → nama pengirim terakhir; (2) balasan bot kini ditampilkan: dibaca hanya-baca dari `~/.hermes/state.db` (sesi WhatsApp grup, assistant final), diimpor inkremental ke `wa_messages` (from_me=1), tampil di kanan + ikut dalam ringkasan sebagai "(bot)"; (3) tombol ↻ Refresh + "Diperbarui jam" di header chat. Data asli (memori, read-only): 7 balasan bot, mention jadi @Rederp/@Cahyo Febrianto. Kiriman cron Hermes tidak tersedia (deliveries.db tanpa target/isi). 2 test baru, total 76 PASS — done
 - 2026-10-18 Rilis Pilih Group + Summary Chating + tindak lanjut (mention/balasan bot/refresh): restart oleh user 23:40:53 (PID 319708), schema v4, `/healthz` ok. Data production: HG Bot Testing 19 pesan (6 balasan bot), WIT. Surabaya - Strategic 4 pesan (1 balasan bot); nama grup dari bridge; user ilham sudah membuka halaman grup (200) — done
+- 2026-10-18 Permintaan user: sidebar tanpa dropdown — bagian "WhatsApp" berisi Pilih Group, Summary Chat (dulu "Summary Chating"), Koneksikan WA, langsung tampil seperti menu lain; Inbox dihapus (T-044 batal). Dihapus juga: grup "WhatsApp Agent" yang bisa dibuka/tutup, kartu placeholder "Segera hadir", dan CSS-nya; breadcrumb jadi "WhatsApp / …"; `#wa-inbox` lama kini kembali ke chat. Hanya frontend (tanpa restart). Test UI ditulis ulang untuk struktur baru (urutan, tanpa dropdown/Inbox/placeholder); screenshot dicek — done
+- 2026-10-18 Status → ready-for-qa: semua menu live; QA tersisa = uji ganti nomor WhatsApp sungguhan lewat Koneksikan WA + `wa-apply.sh` — ready-for-qa
 
 ## Dependencies
 

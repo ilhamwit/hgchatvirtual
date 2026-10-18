@@ -68,7 +68,7 @@ async function main(argv) {
   const live = readAccount(cfg.sessionDir);
   if (!pending) {
     console.log('Tidak ada nomor baru yang menunggu dipasang.');
-    console.log('Buka HG Chat → WhatsApp Agent → Koneksikan WA, lalu scan QR-nya dulu.');
+    console.log('Buka HG Chat → WhatsApp → Koneksikan WA, lalu scan QR-nya dulu.');
     return 1;
   }
   console.log(`Nomor sekarang : ${show(live)}`);

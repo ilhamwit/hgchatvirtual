@@ -134,7 +134,7 @@ sudo systemctl start chat-center
 
 ### WhatsApp Hermes (Koneksikan WA)
 
-Halaman **WhatsApp Agent → Koneksikan WA** menampilkan nomor WhatsApp yang
+Halaman **WhatsApp → Koneksikan WA** menampilkan nomor WhatsApp yang
 dipakai Hermes (profil `default`, bridge di 127.0.0.1:3010) dan bisa memasangkan
 nomor baru lewat QR. Semua user yang login boleh memulai pairing; setiap langkah
 masuk audit log (`wa_pair_*`, `wa_number_changed`).
@@ -153,7 +153,7 @@ masuk audit log (`wa_pair_*`, `wa_number_changed`).
 
 Web tidak pernah menghentikan/me-restart Hermes sendiri; itu hanya `wa-apply.sh`.
 
-### Grup WhatsApp (Pilih Group, Summary Chating)
+### Grup WhatsApp (Pilih Group, Summary Chat)
 
 Sumbernya arsip grup milik bridge Hermes (`WHATSAPP_GROUP_ARCHIVE`, saat ini
 `~/.hermes/whatsapp/group_archive.jsonl`). Chat Center hanya **membaca** file
@@ -163,7 +163,7 @@ membaca semua grup tempat bot berada.
 
 - **Pilih Group**: daftar grup → chat read-only (per hari, muat yang lebih lama,
   diperbarui tiap 15 dtk).
-- **Summary Chating**: grup + rentang tanggal (maks 92 hari / 5000 pesan) +
+- **Summary Chat**: grup + rentang tanggal (maks 92 hari / 5000 pesan) +
   agent (default Dave) → diringkas oleh agent Hermes di latar belakang; rentang
   panjang dipecah per bagian lalu digabung. Hasil tersimpan di `wa_summaries`.
 
