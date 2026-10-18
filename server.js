@@ -22,6 +22,7 @@ const { createWhatsApp } = require('./lib/whatsapp');
 const { createWaArchive } = require('./lib/wa-archive');
 const { createEvents } = require('./lib/events');
 const { createTasks } = require('./lib/tasks');
+const { createHub } = require('./lib/hub');
 
 // Fail fast on bad config. Production (systemd) must provide the Hermes
 // API key; CHAT_DEV=1 is the explicit opt-out for local UI work. See .env.example.
@@ -109,6 +110,9 @@ const whatsapp = createWhatsApp({
 
 const gateway = createGateway({ url: GATEWAY, key: HERMES_API_KEY });
 
+// Live updates to open browser tabs (EPIC-012 Chat & Discussion).
+const hub = createHub();
+
 // Schedule (EPIC-009): events, Aurix agendas, and the outbox the bot sends
 // (agenda on "Kirim", then reminders). The worker checks the outbox every 30s.
 const events = createEvents({
@@ -127,7 +131,8 @@ const api = createApi({
   waArchive: createWaArchive({ db, gateway }),
   events,
   // Task Focus (EPIC-010): team tasks and their activity.
-  tasks: createTasks({ db })
+  tasks: createTasks({ db }),
+  hub
 });
 
 // Keep only a basename, and only characters that are safe in a shell argument
@@ -373,6 +378,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Server-Sent Events stream (EPIC-012). Ends when the session does.
+  if (urlNoQuery === '/api/stream' && req.method === 'GET') {
+    const token = getCookie(req, COOKIE_NAME);
+    hub.attach(req, res, user, () => !!auth.getSessionUser(db, token));
+    return;
+  }
+
   if (urlNoQuery === '/api/me' && req.method === 'GET') {
     sendJson(res, 200, { username: user.username, displayName: user.displayName, role: user.role });
     return;
@@ -411,5 +423,5 @@ const server = http.createServer((req, res) => {
 
 // A pairing bridge runs in its own process group; don't leave it behind.
 for (const signal of ['SIGTERM', 'SIGINT']) {
-  process.on(signal, () => { whatsapp.shutdown(); process.exit(0); });
+  process.on(signal, () => { whatsapp.shutdown(); hub.close(); process.exit(0); });
 }

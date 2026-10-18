@@ -68,6 +68,7 @@ test('sidebar Task Focus opens #tasks with a real badge', () => {
   assert.match(html, /<div class="wa-page wa-full hidden" id="tasksPage">/);
   assert.match(js, /api\('GET', '\/api\/tasks\/summary'\)/);
   assert.doesNotMatch(html, /Chat &amp; Discussion <span class="nb">3<\/span>/, 'no made-up unread count');
+  assert.match(html, /Chat &amp; Discussion <span class="nb hidden" id="dsBadge"><\/span>/, 'a real one instead (EPIC-012)');
 });
 
 // EPIC-011: sessions per agent with a right-click menu; files open in a viewer.
@@ -78,4 +79,14 @@ test('history is per agent with a session menu; attachments open in the viewer',
   assert.match(js, /await confirmDialog\(/, 'delete asks first');
   assert.match(js, /'\/api\/files\/' \+ encodeURIComponent/);
   for (const id of ['ctxMenu', 'confirmBox', 'fileViewer', 'archBanner', 'skAgent']) assert.match(html, new RegExp(`id="${id}"`), id);
+});
+
+// EPIC-012: Chat & Discussion is the team room, live over one SSE stream.
+test('Chat & Discussion opens #discuss and listens to /api/stream', () => {
+  assert.match(html, /<div class="nav-item" data-wa="discuss" onclick="openWaPage\('discuss'\)">/);
+  assert.match(js, /\bdiscuss: \{ title: 'Diskusi tim', crumb: 'Chat & Discussion', hash: 'discuss' \}/);
+  assert.match(js, /\bdiscuss: \{ el: 'discussPage', open: dsOpen, close: dsClose \}/);
+  assert.match(html, /<div class="wa-page wa-full hidden" id="discussPage">/);
+  assert.match(js, /new EventSource\('\/api\/stream'\)/);
+  assert.match(js, /meReady\.then\(\(\) => \{ dsConnect\(\); dsRefreshSoon\(\); \}\);/, 'the badge is live on every page');
 });

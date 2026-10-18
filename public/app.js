@@ -666,7 +666,7 @@ function fileImgRetry(img) {
 
 const fv = { list: [], i: 0 };
 function openFile(el) {
-  const area = el.closest('#msgArea');
+  const area = el.closest('#msgArea, .ds-msgs, .ds-thread-list');
   const ext = fileExt(el.dataset.file);
   // Images: browse every image in this chat, like a gallery.
   fv.list = FV_IMAGE.includes(ext) && area ? [...area.querySelectorAll('.mt-img')] : [el];
@@ -899,7 +899,8 @@ const WA_PAGES = {
   connect: { title: 'Koneksikan WA' },
   // Not WhatsApp, but the same full-width page slot (EPIC-009).
   schedule: { title: 'Jadwal & Meeting', crumb: 'Schedule', hash: 'schedule' },
-  tasks: { title: 'Fokus saya', crumb: 'Task Focus', hash: 'tasks' }
+  tasks: { title: 'Fokus saya', crumb: 'Task Focus', hash: 'tasks' },
+  discuss: { title: 'Diskusi tim', crumb: 'Chat & Discussion', hash: 'discuss' }
 };
 const pageHash = (key) => '#' + (WA_PAGES[key].hash || 'wa-' + key);
 let waPage = null;
@@ -1965,13 +1966,405 @@ async function tfBadge() {
 tfBadge();
 setInterval(tfBadge, 5 * 60 * 1000);
 
+/* ── Chat & Discussion (EPIC-012) ─────────────
+   Team channels (open to everyone) and direct messages, live over one
+   Server-Sent Events stream that is open on every page (it also drives the
+   sidebar badge). Threads open in a panel on the right. */
+const ds = { rooms: [], people: [], online: new Set(), cur: null, msgs: [], hasMore: false, thread: null, threadMsgs: [], staged: { main: [], thread: [] }, es: null, refreshT: null };
+const dsMe = () => ME && ME.username;
+const dsRoom = (id) => ds.rooms.find((r) => r.id === id);
+const dsRoomName = (r) => (r.kind === 'dm' ? (r.with ? r.with.name : 'Pesan langsung') : '#' + r.name);
+function dsAvatar(p, size) { return `<span class="ds-avi${size ? ' ' + size : ''}" style="background:${tfColor(p)}">${escapeHtml(tfInitials(p))}</span>`; }
+
+// ── the live stream (all pages) ──
+function dsConnect() {
+  if (ds.es || typeof EventSource === 'undefined') return;
+  ds.es = new EventSource('/api/stream');
+  ds.es.onmessage = (e) => { let ev; try { ev = JSON.parse(e.data); } catch (x) { return; } dsEvent(ev); };
+  // The browser reconnects by itself; after a gap, catch up.
+  ds.es.onopen = () => dsRefreshSoon();
+}
+
+function dsEvent(ev) {
+  if (ev.type === 'hello' || ev.type === 'presence') { ds.online = new Set(ev.online); if (waPage === 'discuss') { dsRenderSide(); dsRenderHead(); } return; }
+  const here = waPage === 'discuss' && ds.cur && ev.roomId === ds.cur.id;
+  if ((ev.type === 'message' || ev.type === 'edit' || ev.type === 'delete') && here) {
+    const m = ev.message;
+    if (!m.parentId) dsUpsert(ds.msgs, m, ev.type === 'message');
+    else if (ev.parent) dsUpsert(ds.msgs, ev.parent, false);
+    if (ds.thread && (m.parentId === ds.thread.id || m.id === ds.thread.id)) {
+      if (m.id === ds.thread.id) ds.thread = m; else dsUpsert(ds.threadMsgs, m, ev.type === 'message');
+      dsRenderThread(m.parentId === ds.thread.id && ev.type === 'message');
+    }
+    dsRenderMsgs(ev.type === 'message' && !m.parentId && dsNearBottom());
+    if (ev.type === 'message' && document.visibilityState === 'visible') dsMarkRead();
+  }
+  dsRefreshSoon();
+}
+function dsUpsert(list, m, append) {
+  const i = list.findIndex((x) => x.id === m.id);
+  if (i >= 0) list[i] = m; else if (append) list.push(m);
+}
+
+// Counts and the room list, at most every 300 ms.
+function dsRefreshSoon() {
+  clearTimeout(ds.refreshT);
+  ds.refreshT = setTimeout(async () => {
+    try {
+      if (waPage === 'discuss') {
+        const r = await api('GET', '/api/rooms');
+        ds.rooms = r.rooms; ds.people = r.people; ds.online = new Set(r.online);
+        dsRenderSide(); dsRenderHead();
+        dsBadgeSet(ds.rooms.reduce((t, x) => ({ unread: t.unread + x.unread, mentions: t.mentions + x.mentions }), { unread: 0, mentions: 0 }));
+      } else dsBadgeSet(await api('GET', '/api/rooms/unread'));
+    } catch (e) { /* next event tries again */ }
+  }, 300);
+}
+function dsBadgeSet({ unread, mentions }) {
+  const b = document.getElementById('dsBadge');
+  if (!b) return;
+  b.textContent = mentions ? '@' + (unread > 99 ? '99+' : unread) : (unread > 99 ? '99+' : unread);
+  b.classList.toggle('hidden', !unread);
+  b.classList.toggle('late', mentions > 0);
+  b.title = `${unread} pesan belum dibaca${mentions ? `, ${mentions} menyebut Anda` : ''}`;
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && waPage === 'discuss' && ds.cur) dsMarkRead(); });
+
+// ── page ──
+async function dsOpen() {
+  await meReady;
+  const el = document.getElementById('discussPage');
+  el.innerHTML = `<div class="ds-side" id="dsSide"><div class="wa-msg"><span class="wa-spin"></span>Memuat…</div></div>
+    <div class="ds-main">
+      <div class="ds-head" id="dsHead"></div>
+      <div class="ds-msgs" id="dsMsgs"></div>
+      ${dsComposerHtml('main')}
+    </div>
+    <div class="ds-thread hidden" id="dsThread"></div>`;
+  try {
+    const r = await api('GET', '/api/rooms');
+    ds.rooms = r.rooms; ds.people = r.people; ds.online = new Set(r.online);
+  } catch (e) { document.getElementById('dsSide').innerHTML = `<div class="wa-msg err">${escapeHtml(e.message)}</div>`; return; }
+  if (waPage !== 'discuss') return;
+  let last = null;
+  try { last = Number(localStorage.getItem('ds.room')); } catch (e) { /* private mode */ }
+  const first = dsRoom(last) || ds.rooms.find((x) => x.name === 'umum') || ds.rooms[0];
+  dsRenderSide();
+  if (first) dsShowRoom(first.id);
+}
+function dsClose() { ds.cur = null; ds.thread = null; }
+
+function dsRenderSide() {
+  const el = document.getElementById('dsSide');
+  if (!el) return;
+  const count = (r) => (r && r.unread ? `<span class="ds-count${r.mentions ? ' at' : ''}">${r.mentions ? '@' : ''}${r.unread}</span>` : '');
+  const channels = ds.rooms.filter((r) => r.kind === 'channel').map((r) =>
+    `<button type="button" class="ds-item${ds.cur && ds.cur.id === r.id ? ' on' : ''}${r.unread ? ' unread' : ''}" onclick="dsShowRoom(${r.id})"><span class="ds-hash">#</span><span class="ds-item-name">${escapeHtml(r.name)}</span>${count(r)}</button>`).join('');
+  const dms = ds.people.filter((p) => p.username !== dsMe()).map((p) => {
+    const r = ds.rooms.find((x) => x.kind === 'dm' && x.with && x.with.username === p.username);
+    return `<button type="button" class="ds-item${r && ds.cur && ds.cur.id === r.id ? ' on' : ''}${r && r.unread ? ' unread' : ''}" onclick="dsOpenDm('${escapeAttr(p.username)}')">
+      <span class="ds-pp">${dsAvatar(p, 'sm')}<span class="ds-dot${ds.online.has(p.username) ? ' on' : ''}"></span></span><span class="ds-item-name">${escapeHtml(p.name)}</span>${count(r)}</button>`;
+  }).join('');
+  el.innerHTML = `<div class="ds-side-h">Channel <button type="button" onclick="dsNewChannel()" title="Buat channel" aria-label="Buat channel">+</button></div>${channels}
+    <div class="ds-side-h">Pesan langsung</div>${dms || '<div class="ds-none">Belum ada anggota lain.</div>'}`;
+}
+
+function dsRenderHead() {
+  const el = document.getElementById('dsHead');
+  if (!el || !ds.cur) return;
+  const r = dsRoom(ds.cur.id) || ds.cur;
+  if (r.kind === 'dm') {
+    const on = r.with && ds.online.has(r.with.username);
+    el.innerHTML = `${dsAvatar(r.with)}<div class="ds-head-t"><b>${escapeHtml(r.with ? r.with.name : '')}</b><span>${on ? '<i class="ds-dot on"></i> Online' : 'Offline'} · pesan langsung, hanya kalian berdua</span></div>`;
+  } else {
+    el.innerHTML = `<div class="ds-head-t"><b># ${escapeHtml(r.name)}</b>
+      <button type="button" class="ds-topic" onclick="dsEditTopic()" title="Ubah topik">${r.topic ? escapeHtml(r.topic) : '<i>Tambahkan topik…</i>'}</button></div>
+      <span class="ds-head-n">${ds.online.size} online</span>`;
+  }
+}
+
+async function dsShowRoom(id) {
+  ds.cur = dsRoom(id) || { id };
+  ds.thread = null;
+  document.getElementById('dsThread').classList.add('hidden');
+  try { localStorage.setItem('ds.room', id); } catch (e) { /* private mode */ }
+  dsRenderSide(); dsRenderHead();
+  const box = document.getElementById('dsMsgs');
+  box.innerHTML = '<div class="wa-msg"><span class="wa-spin"></span>Memuat pesan…</div>';
+  try {
+    const r = await api('GET', `/api/rooms/${id}/messages`);
+    if (!ds.cur || ds.cur.id !== id) return;
+    ds.msgs = r.messages; ds.hasMore = r.hasMore;
+  } catch (e) { box.innerHTML = `<div class="wa-msg err">${escapeHtml(e.message)}</div>`; return; }
+  dsRenderMsgs(true);
+  dsMarkRead();
+  const ta = document.getElementById('dsTa-main');
+  if (ta) { ta.placeholder = 'Tulis pesan ke ' + dsRoomName(ds.cur) + '… (@ untuk menyebut)'; ta.focus(); }
+}
+
+async function dsOpenDm(username) {
+  try { const r = await api('POST', '/api/rooms/dm', { username }); if (!dsRoom(r.room.id)) ds.rooms.push(r.room); dsShowRoom(r.room.id); }
+  catch (e) { showToast(e.message); }
+}
+
+let dsReadT = null;
+function dsMarkRead() {
+  clearTimeout(dsReadT);
+  const id = ds.cur && ds.cur.id;
+  dsReadT = setTimeout(() => { if (id) api('POST', `/api/rooms/${id}/read`, {}).then(() => dsRefreshSoon()).catch(() => {}); }, 400);
+}
+
+function dsNearBottom() { const b = document.getElementById('dsMsgs'); return !b || b.scrollHeight - b.scrollTop - b.clientHeight < 120; }
+
+// @username of a team member -> highlighted (and stronger when it is me).
+function dsMentions(html) {
+  const names = new Set(ds.people.map((p) => p.username.toLowerCase()));
+  return html.replace(/(^|[\s(>])@([a-z0-9._-]{2,32})/gi, (m, pre, n) => names.has(n.toLowerCase())
+    ? `${pre}<span class="ds-at${n.toLowerCase() === (dsMe() || '').toLowerCase() ? ' me' : ''}">@${n}</span>` : m);
+}
+
+function dsMsgHtml(m, prev, inThread) {
+  const day = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(t);
+  const sep = !prev || day(prev.createdAt) !== day(m.createdAt) ? `<div class="ds-day"><span>${escapeHtml(waDay(m.createdAt))}</span></div>` : '';
+  const cont = !sep && prev && prev.author && m.author && prev.author.id === m.author.id && m.createdAt - prev.createdAt < 5 * 60000 && !prev.deleted;
+  const mine = m.author && m.author.username === dsMe();
+  const body = m.deleted ? '<div class="ds-text del">Pesan ini dihapus</div>'
+    : (m.body ? `<div class="ds-text" id="dsText-${m.id}">${dsMentions(formatMsg(m.body))}</div>` : '') + renderMsgAtt(m.attachments);
+  const replies = !inThread && m.replies ? `<button type="button" class="ds-replies" onclick="dsOpenThread(${m.id})">💬 ${m.replies} balasan<span> · terakhir ${escapeHtml(waClock(m.lastReplyAt))}</span></button>` : '';
+  const acts = m.deleted ? '' : `<div class="ds-acts">
+      ${inThread ? '' : `<button type="button" onclick="dsOpenThread(${m.id})" title="Balas di utas">💬</button>`}
+      ${mine ? `<button type="button" onclick="dsEdit(${m.id})" title="Ubah">✏️</button><button type="button" onclick="dsDelete(${m.id})" title="Hapus">🗑️</button>` : ''}</div>`;
+  return `${sep}<div class="ds-msg${cont ? ' cont' : ''}${m.mentions && m.mentions.includes(dsMe()) ? ' mention' : ''}" data-id="${m.id}">
+      <div class="ds-gut">${cont ? `<span class="ds-hover-time">${escapeHtml(waClock(m.createdAt))}</span>` : dsAvatar(m.author)}</div>
+      <div class="ds-body">${cont ? '' : `<div class="ds-meta"><b>${escapeHtml(m.author ? m.author.name : 'Pengguna terhapus')}</b><span>${escapeHtml(waClock(m.createdAt))}</span></div>`}
+        ${body}${m.editedAt && !m.deleted ? '<span class="ds-edited">(diedit)</span>' : ''}${replies}</div>${acts}
+    </div>`;
+}
+
+function dsRenderMsgs(scroll) {
+  const box = document.getElementById('dsMsgs');
+  if (!box) return;
+  const keep = box.scrollHeight - box.scrollTop;
+  const intro = ds.cur && !ds.hasMore ? `<div class="ds-intro"><b>${escapeHtml(dsRoomName(dsRoom(ds.cur.id) || ds.cur))}</b><p>${(dsRoom(ds.cur.id) || {}).kind === 'dm' ? 'Awal pesan langsung kalian. Hanya kalian berdua yang bisa melihatnya.' : 'Awal channel ini. Semua anggota tim bisa membaca dan menulis di sini.'}</p></div>` : '';
+  box.innerHTML = (ds.hasMore ? '<button type="button" class="ds-more" onclick="dsLoadOlder()">Muat pesan sebelumnya</button>' : intro) +
+    (ds.msgs.length ? ds.msgs.map((m, i) => dsMsgHtml(m, ds.msgs[i - 1], false)).join('') : '<div class="ds-empty">Belum ada pesan. Mulai diskusi di bawah.</div>');
+  if (scroll === true) box.scrollTop = box.scrollHeight;
+  else if (scroll === 'keep') box.scrollTop = box.scrollHeight - keep;
+}
+
+async function dsLoadOlder() {
+  if (!ds.msgs.length) return;
+  try {
+    const r = await api('GET', `/api/rooms/${ds.cur.id}/messages?before=${ds.msgs[0].id}`);
+    ds.msgs = r.messages.concat(ds.msgs); ds.hasMore = r.hasMore;
+    dsRenderMsgs('keep');
+  } catch (e) { showToast(e.message); }
+}
+
+// ── thread ──
+async function dsOpenThread(id) {
+  const panel = document.getElementById('dsThread');
+  panel.classList.remove('hidden');
+  panel.innerHTML = '<div class="wa-msg"><span class="wa-spin"></span>Memuat utas…</div>';
+  try {
+    const r = await api('GET', `/api/rooms/${ds.cur.id}/messages?parent=${id}`);
+    ds.thread = r.parent; ds.threadMsgs = r.messages;
+  } catch (e) { panel.innerHTML = `<div class="wa-msg err">${escapeHtml(e.message)}</div>`; return; }
+  ds.staged.thread = [];
+  dsRenderThread(true, true);
+}
+function dsRenderThread(scroll, rebuild) {
+  const panel = document.getElementById('dsThread');
+  if (!panel || !ds.thread) return;
+  const list = `<div class="ds-thread-parent">${dsMsgHtml(ds.thread, null, true)}</div>
+    <div class="ds-thread-n">${ds.threadMsgs.filter((m) => !m.deleted).length} balasan</div>
+    ${ds.threadMsgs.map((m, i) => dsMsgHtml(m, ds.threadMsgs[i - 1], true)).join('')}`;
+  if (rebuild || !panel.querySelector('.ds-thread-list')) {
+    panel.innerHTML = `<div class="ds-thread-h"><b>Utas</b><span>${escapeHtml(dsRoomName(dsRoom(ds.cur.id) || ds.cur))}</span>
+        <button type="button" onclick="dsCloseThread()" aria-label="Tutup utas">✕</button></div>
+      <div class="ds-thread-list">${list}</div>${dsComposerHtml('thread')}`;
+    document.getElementById('dsTa-thread').focus();
+  } else panel.querySelector('.ds-thread-list').innerHTML = list;
+  const l = panel.querySelector('.ds-thread-list');
+  if (scroll) l.scrollTop = l.scrollHeight;
+}
+function dsCloseThread() { ds.thread = null; document.getElementById('dsThread').classList.add('hidden'); }
+
+// ── composer (main and thread) ──
+function dsComposerHtml(w) {
+  return `<div class="ds-compose" id="dsCompose-${w}">
+      <div class="ds-att-row" id="dsAtt-${w}"></div>
+      <div class="ds-compose-row">
+        <button type="button" class="ds-attach" onclick="document.getElementById('dsFile-${w}').click()" title="Lampirkan file" aria-label="Lampirkan file">📎</button>
+        <input type="file" id="dsFile-${w}" multiple hidden onchange="dsPick('${w}', this)">
+        <textarea id="dsTa-${w}" rows="1" placeholder="${w === 'thread' ? 'Balas di utas…' : 'Tulis pesan…'}" oninput="dsInput('${w}', this)" onkeydown="dsKey(event,'${w}')"></textarea>
+        <button type="button" class="ds-send" onclick="dsSend('${w}')" title="Kirim (Enter)" aria-label="Kirim">${SEND_ICON}</button>
+      </div>
+      <div class="ds-suggest hidden" id="dsSug-${w}"></div>
+    </div>`;
+}
+
+function dsPick(w, input) {
+  const files = [...input.files];
+  input.value = '';
+  for (const f of files) {
+    const item = { id: 'ds' + (++stagedSeq), name: f.name, size: f.size, status: 'up', path: null, error: null };
+    ds.staged[w].push(item);
+    if (f.size > MAX_ATTACH_BYTES) { item.status = 'err'; item.error = 'Lebih dari ' + Math.round(MAX_ATTACH_BYTES / 1048576) + ' MB'; continue; }
+    fetch('/upload', { method: 'POST', headers: { 'X-Upload-Name': encodeURIComponent(f.name), 'Content-Type': f.type || 'application/octet-stream' }, body: f })
+      .then(async (res) => { const d = await res.json().catch(() => ({})); if (!res.ok || !d.path) throw new Error(d.error || 'Upload gagal'); item.status = 'ok'; item.path = d.path; item.size = d.size; })
+      .catch((e) => { item.status = 'err'; item.error = e.message; })
+      .finally(() => dsRenderAtt(w));
+  }
+  dsRenderAtt(w);
+}
+function dsRenderAtt(w) {
+  const row = document.getElementById('dsAtt-' + w);
+  if (!row) return;
+  row.innerHTML = ds.staged[w].map((s) => `<span class="ds-chip ${s.status}" title="${escapeAttr(s.error || s.name)}">${s.status === 'up' ? '<span class="wa-spin"></span>' : FILE_ICON}
+      <span>${escapeHtml(s.name)}</span><button type="button" onclick="dsUnstage('${w}','${s.id}')" aria-label="Hapus lampiran">×</button></span>`).join('');
+}
+function dsUnstage(w, id) { ds.staged[w] = ds.staged[w].filter((s) => s.id !== id); dsRenderAtt(w); }
+
+async function dsSend(w) {
+  const ta = document.getElementById('dsTa-' + w);
+  const body = ta.value.trim();
+  const items = ds.staged[w];
+  if (items.some((s) => s.status === 'up')) { showToast('⏳ Lampiran masih diunggah'); return; }
+  const att = items.filter((s) => s.status === 'ok').map((s) => ({ name: s.name, size: s.size, path: s.path }));
+  if (!body && !att.length) return;
+  const roomId = ds.cur.id;
+  const parentId = w === 'thread' && ds.thread ? ds.thread.id : undefined;
+  ta.value = ''; dsAutosize(ta); ds.staged[w] = []; dsRenderAtt(w); dsHideSuggest(w);
+  try {
+    const r = await api('POST', `/api/rooms/${roomId}/messages`, { body, attachments: att, parentId });
+    // The stream brings it too; drawing now keeps the sender's view instant.
+    if (ds.cur && ds.cur.id === roomId) {
+      if (!parentId) { dsUpsert(ds.msgs, r.message, true); dsRenderMsgs(true); }
+      else if (ds.thread && ds.thread.id === parentId) { dsUpsert(ds.threadMsgs, r.message, true); dsRenderThread(true); }
+    }
+  } catch (e) {
+    showToast('⚠️ Pesan tidak terkirim: ' + e.message);
+    ta.value = body; dsAutosize(ta);
+  }
+}
+
+function dsAutosize(ta) { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 160) + 'px'; }
+
+// @ suggestions: the word being typed before the caret.
+function dsInput(w, ta) {
+  dsAutosize(ta);
+  const before = ta.value.slice(0, ta.selectionStart);
+  const m = before.match(/(^|\s)@([a-z0-9._-]*)$/i);
+  const box = document.getElementById('dsSug-' + w);
+  if (!m) { dsHideSuggest(w); return; }
+  const q = m[2].toLowerCase();
+  const hits = ds.people.filter((p) => p.username !== dsMe() && (p.username.toLowerCase().startsWith(q) || p.name.toLowerCase().split(/\s+/).some((x) => x.startsWith(q)))).slice(0, 6);
+  if (!hits.length) { dsHideSuggest(w); return; }
+  box.innerHTML = hits.map((p, i) => `<button type="button" class="${i ? '' : 'on'}" onmousedown="event.preventDefault();dsPickMention('${w}','${escapeAttr(p.username)}')">${dsAvatar(p, 'sm')}<b>${escapeHtml(p.name)}</b><span>@${escapeHtml(p.username)}</span></button>`).join('');
+  box.classList.remove('hidden');
+}
+function dsHideSuggest(w) { const b = document.getElementById('dsSug-' + w); if (b) b.classList.add('hidden'); }
+function dsPickMention(w, username) {
+  const ta = document.getElementById('dsTa-' + w);
+  const pos = ta.selectionStart;
+  const before = ta.value.slice(0, pos).replace(/@([a-z0-9._-]*)$/i, '@' + username + ' ');
+  ta.value = before + ta.value.slice(pos);
+  ta.selectionStart = ta.selectionEnd = before.length;
+  dsHideSuggest(w); ta.focus();
+}
+function dsKey(e, w) {
+  const box = document.getElementById('dsSug-' + w);
+  if (box && !box.classList.contains('hidden')) {
+    const items = [...box.querySelectorAll('button')];
+    const i = items.findIndex((b) => b.classList.contains('on'));
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const j = (i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length;
+      items.forEach((b, k) => b.classList.toggle('on', k === j));
+      return;
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); items[Math.max(0, i)].dispatchEvent(new MouseEvent('mousedown')); return; }
+    if (e.key === 'Escape') { dsHideSuggest(w); return; }
+  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dsSend(w); }
+}
+
+// ── edit / delete own messages ──
+function dsFind(id) { return ds.msgs.find((m) => m.id === id) || ds.threadMsgs.find((m) => m.id === id) || (ds.thread && ds.thread.id === id ? ds.thread : null); }
+function dsEdit(id) {
+  const m = dsFind(id);
+  const el = document.querySelector(`.ds-msg[data-id="${id}"] .ds-body`);
+  if (!m || !el) return;
+  const old = el.innerHTML;
+  el.innerHTML = `<textarea class="ds-edit" rows="2">${escapeHtml(m.body)}</textarea>
+    <div class="ds-edit-acts"><span>Enter simpan · Esc batal</span><button type="button" class="wa-btn ghost">Batal</button><button type="button" class="wa-btn primary">Simpan</button></div>`;
+  const ta = el.querySelector('textarea');
+  dsAutosize(ta); ta.focus(); ta.selectionStart = ta.value.length;
+  const cancel = () => { el.innerHTML = old; };
+  const save = async () => {
+    try { await api('PATCH', '/api/room-messages/' + id, { body: ta.value }); }   // the stream redraws it
+    catch (e) { showToast(e.message); cancel(); }
+  };
+  ta.oninput = () => dsAutosize(ta);
+  ta.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); } else if (e.key === 'Escape') cancel(); };
+  const [b1, b2] = el.querySelectorAll('.ds-edit-acts button');
+  b1.onclick = cancel; b2.onclick = save;
+}
+async function dsDelete(id) {
+  if (!(await confirmDialog('Hapus pesan ini?', 'Pesan akan tampil sebagai "Pesan ini dihapus" untuk semua orang.', 'Hapus'))) return;
+  try { await api('DELETE', '/api/room-messages/' + id); } catch (e) { showToast(e.message); }
+}
+
+// ── channel: create, topic ──
+function dsNewChannel() {
+  const box = document.getElementById('confirmBox');
+  box.innerHTML = `<form class="cfm-card" onsubmit="event.preventDefault();dsCreateChannel(this)">
+      <h3>Buat channel</h3><p>Channel terbuka untuk seluruh tim.</p>
+      <label class="ds-field">Nama<input name="name" maxlength="40" required placeholder="mis. proyek-website" autocomplete="off"></label>
+      <label class="ds-field">Topik <span>(opsional)</span><input name="topic" maxlength="200" placeholder="Untuk apa channel ini?"></label>
+      <div class="cfm-actions"><button type="button" class="cfm-no" onclick="document.getElementById('confirmBox').classList.add('hidden')">Batal</button><button type="submit" class="cfm-yes ok">Buat</button></div></form>`;
+  box.classList.remove('hidden');
+  box.onclick = (e) => { if (e.target === box) box.classList.add('hidden'); };
+  box.querySelector('input').focus();
+}
+async function dsCreateChannel(form) {
+  try {
+    const r = await api('POST', '/api/rooms', { name: form.name.value, topic: form.topic.value });
+    document.getElementById('confirmBox').classList.add('hidden');
+    ds.rooms.push(r.room);
+    dsShowRoom(r.room.id);
+  } catch (e) { showToast(e.message); }
+}
+async function dsEditTopic() {
+  const r = dsRoom(ds.cur.id);
+  const el = document.querySelector('#dsHead .ds-topic');
+  if (!r || !el) return;
+  el.outerHTML = `<input class="ds-topic-in" maxlength="200" value="${escapeAttr(r.topic || '')}" placeholder="Topik channel">`;
+  const input = document.querySelector('#dsHead .ds-topic-in');
+  input.focus();
+  let done = false;
+  const finish = async (save) => {
+    if (done) return; done = true;
+    if (save && input.value.trim() !== (r.topic || '')) {
+      try { await api('PATCH', '/api/rooms/' + r.id, { topic: input.value }); r.topic = input.value.trim() || null; } catch (e) { showToast(e.message); }
+    }
+    dsRenderHead();
+  };
+  input.onkeydown = (e) => { if (e.key === 'Enter') finish(true); else if (e.key === 'Escape') finish(false); };
+  input.onblur = () => finish(true);
+}
+
+meReady.then(() => { dsConnect(); dsRefreshSoon(); });
+
 /* ── Page registry: one container per WhatsApp page ── */
 const WA_IMPL = {
   connect: { el: 'waConnect', open: waConnectOpen, close: waConnectClose },
   groups: { el: 'waGroupsPage', open: waGroupsOpen, close: waGroupsClose },
   summary: { el: 'waSummaryPage', open: waSummaryOpen, close: waSummaryClose },
   schedule: { el: 'schedulePage', open: schOpen, close: schClose },
-  tasks: { el: 'tasksPage', open: tfOpen, close: tfClose }
+  tasks: { el: 'tasksPage', open: tfOpen, close: tfClose },
+  discuss: { el: 'discussPage', open: dsOpen, close: dsClose }
 };
 function closeWaPages() { for (const p of Object.values(WA_IMPL)) p.close(); }
 
