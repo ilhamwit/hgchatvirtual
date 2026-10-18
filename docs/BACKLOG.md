@@ -31,7 +31,7 @@ Semua seed di bawah sudah dipromosikan menjadi task di epic masing-masing.
 - [ ] **P1** (Frontend) Daftar & pencarian percakapan — T-020, T-021
 - [ ] **P1** (Frontend) Buang UI hiasan; data agent dari server — T-022, T-023
 - [ ] **P1** (Backend) Lampiran milik user/percakapan, unduh ulang, retensi — T-024 … T-026
-- [ ] **P1** (Infra) Backup SQLite, `/healthz`, log, audit — T-027 … T-030
+- [x] **P1** (Infra) Backup SQLite, `/healthz`, log, audit — T-027 … T-030
 
 ## Phase 3 · Kerja tim _(EPIC-006)_
 

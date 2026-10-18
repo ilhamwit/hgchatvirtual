@@ -1,6 +1,6 @@
 # EPIC-005: Operasional — Backup, Health, Log
 
-status: ready-for-qa
+status: done
 environment: dev
 phase: 2
 priority: P1
@@ -25,7 +25,7 @@ hanya baris start di journald.
 
 ### Backup
 
-- [ ] **T-027** Backup harian SQLite (`VACUUM INTO` ke file bertanggal) lewat systemd timer, simpan 14 hari; salinan ke Nextcloud yang sudah ada; prosedur restore teruji dan tertulis di README.
+- [x] **T-027** Backup harian SQLite (`VACUUM INTO` ke file bertanggal) lewat systemd timer, simpan 14 hari; salinan ke Nextcloud yang sudah ada; prosedur restore teruji dan tertulis di README.
 
 ### Health & monitoring
 
@@ -60,6 +60,7 @@ hanya baris start di journald.
 - 2026-10-18 Test: 8 test baru (`test/ops.test.js`), total 51 PASS; gate PASS, security 0 warning — done
 - 2026-10-18 Status → ready-for-qa. Rilis: merge → restart chat-center (migrasi 3 otomatis) → pasang timer (`bash scripts/install-backup-timer.sh`) → cek `/healthz` dan backup pertama — ready-for-qa
 - 2026-10-18 Rilis lewat `scripts/restart.sh` (user): gate PASS, PID 221120 → 240756, schema v3, `/healthz` lokal & publik `{"ok":true,"db":"ok","hermes":"ok"}`. Tersisa: pasang timer backup (menunggu OK user) — ready-for-qa
+- 2026-10-18 Atas OK user: `scripts/install-backup-timer.sh` → `chat-center-backup.timer` enabled (user unit, linger aktif), jadwal berikutnya Sen 2026-10-19 03:21 WIB (03:15 + jitter). Backup pertama lewat systemd: `data/backups/chat-center-20261018-224422.db`, 72 KB, schema v3, users=4 conversations=6 messages=24, `--verify` OK, file 600/dir 700. Catatan: backup masih di disk yang sama; salinan off-machine (`CHAT_BACKUP_COPY_DIR`) menunggu keputusan lokasi dari user — done
 
 ## Dependencies
 
