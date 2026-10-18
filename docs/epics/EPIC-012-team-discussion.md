@@ -73,6 +73,7 @@ Keputusan pemilik (2026-10-19, menyetujui usulan):
 
 - 2026-10-19 Epic dibuat; pemilik menyetujui usulan (empat keputusan di atas) — on-progress
 - 2026-10-19 Tahap 1 selesai (T-067…T-071). Skema v7: `rooms` (channel/dm), `room_members` (dm), `room_messages` (utas, lampiran, edit/hapus lunak), `room_mentions`, `room_reads`; `#umum` dibuat oleh migrasi. `lib/rooms.js` + `lib/hub.js` (SSE `/api/stream`: pesan/edit/hapus/channel/baca/presence; DM hanya ke dua anggota; heartbeat 25 dtk memeriksa sesi → logout menutup stream). `/api/files` juga melayani lampiran di ruang yang boleh dilihat user. UI `#discuss`: channel + DM (online, belum dibaca, @), pesan per hari & dikelompokkan per pengirim, utas di panel kanan, @sebut dengan saran nama (↑↓ Enter), lampiran + penampil, edit/hapus pesan sendiri, buat channel, ubah topik; badge sidebar real-time di semua halaman. Tes 103/103 (5 baru termasuk stream dua-arah + privasi DM, 1 UI), gates PASS. Screenshot sandbox dengan dua browser terpisah: pesan Irfan muncul di layar Ilham tanpa refresh, badge "@7" turun saat dibaca.
+- 2026-10-19 Restart oleh agent: PID 461690 → 793962, gates PASS, `/healthz` ok, skema v7 — live. Belum terverifikasi: stream real-time lewat Cloudflare dengan dua akun asli (perlu login; QA pemilik).
 
 ## Dependencies
 
