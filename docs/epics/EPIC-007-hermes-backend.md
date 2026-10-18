@@ -72,6 +72,7 @@ percakapan.
 - 2026-10-18 Uji end-to-end lewat dev :8651 (`--gateway`, kunci dari env production): kelima agent menyebut namanya sendiri (dave 1,8 dtk · jaden 1,4 · joel 2,9 · dylan 4,0 · nana 3,4); Dave: "Ingat kata: mangga" → giliran berikutnya "mangga"; "Siapa saya?" → "Hermes Check (@hermescheck)". Data dev dihapus — done
 - 2026-10-18 Status → ready-for-qa (tersisa T-040: restart chat-center + uji browser) — ready-for-qa
 - 2026-10-18 T-040: restart 22:19 (PID 206012, banner "Hermes http://127.0.0.1:8642"). User chat dari browser ke kelima agent; semua dibalas Hermes, 0 error; sesi `hgchat-<id>` tercatat di log agent kelima profil — done
+- 2026-10-18 Atas konfirmasi user ("sudah full Hermes"): `openclaw-gateway` (user service, jalan sejak 1 Okt, 6 akun Telegram aktif) di-stop dan di-disable; tidak ada service/cron lain yang bergantung. Sebelumnya Hermes mencatat 29 konflik polling Telegram/15 menit; setelah stop 0 konflik dalam 80 dtk. Bisa dinyalakan lagi: `systemctl --user enable --now openclaw-gateway` — done
 
 ## Dependencies
 

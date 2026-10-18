@@ -20,6 +20,8 @@ it stops being true. Durable decisions also go in the owning epic's Automation L
   `X-Hermes-Session-Id: hgchat-<conversationId>`; Hermes keeps the transcript,
   so each turn sends only the new message. Conversations from before EPIC-007
   had OpenClaw sessions (`user: hgchat:<id>`); their context does not carry over.
+- OpenClaw is retired: `openclaw-gateway` (user service) was stopped and disabled
+  on 2026-10-18 because it polled the same Telegram bots as Hermes.
 - The browser never reaches Hermes: `lib/api.js` (/api/*) stores messages in
   SQLite and `lib/gateway.js` calls Hermes with the key. Each message to
   an agent starts with `[Dari: <Name> (@user) via HG Chat]`.
