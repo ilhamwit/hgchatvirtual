@@ -6,7 +6,7 @@ phase: 3
 priority: P2
 area: Backend
 retries: 0
-prd: -
+prd: ../product/PRD.md
 stories: -
 tasks: T-031 … T-034
 

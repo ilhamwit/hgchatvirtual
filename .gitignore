@@ -19,3 +19,8 @@ npm-debug.log*
 .DS_Store
 *.swp
 *~
+
+# Agentic kit local state
+.agentic/config.local.yml
+.agentic/loop-ledger.tsv
+.agentic/loop.pause

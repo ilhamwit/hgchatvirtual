@@ -6,7 +6,7 @@ phase: 0
 priority: P0
 area: Infra
 retries: 0
-prd: -
+prd: ../product/PRD.md
 stories: -
 tasks: T-001 … T-005
 
@@ -27,7 +27,7 @@ mengganggu service production. Saat ini semuanya ada di satu file HTML 194 KB
 
 ### Version control
 
-- [ ] **T-001** `git init`, `.gitignore` (env, data/, node_modules, upload), commit awal kondisi saat ini; hapus `server.js.orig-backup-*` setelah tercatat di riwayat git.
+- [x] **T-001** `git init`, `.gitignore` (env, data/, node_modules, upload), commit awal kondisi saat ini; hapus `server.js.orig-backup-*` setelah tercatat di riwayat git.
 
 ### Pecah single-file HTML
 
@@ -58,6 +58,9 @@ mengganggu service production. Saat ini semuanya ada di satu file HTML 194 KB
 ## Automation Log
 
 - 2026-10-18 Epic dibuat dari audit Chat Center (single-file 194 KB, tanpa git) — backlog
+- 2026-10-18 Status → on-progress atas permintaan user — on-progress
+- 2026-10-18 T-001: scan secret (token gateway, CHAT_PASS, CHAT_SECRET tidak ada di file), `git init -b main`, `.gitignore`, commit df5d520 (snapshot as deployed) + 51cf6e4 (hapus `server.js.orig-backup`) — done
+- 2026-10-18 /agentic-init (mode existing): `.agentic/config.yml`, `.claude/{agents,commands,hooks,settings.json}` (guardrail PreToolUse), `CLAUDE.md`/`AGENTS.md`/`CONVENTIONS.md`/`MEMORY.md`/`program.md`/`results.md`, `checks/`, loop docs (loop tetap disabled), draft `docs/product/PRD.md`, `docs/BACKLOG.md`, `docs/DEFINITION-OF-DONE.md`. Kit tidak menyediakan gate script, jadi ditulis khusus project: `scripts/qa.sh` (syntax JS + inline script), `scripts/test.sh` (boot smoke di port acak), `scripts/security-check.sh` (env, nilai secret nyata, pola token). Ketiganya PASS; security 3 warning (CORS *, PIN klien, proxy /v1/*) dilacak di EPIC-001/002. Kode aplikasi tidak diubah — done
 
 ## Dependencies
 
