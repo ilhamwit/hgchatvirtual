@@ -9,66 +9,8 @@
 </head>
 <body>
 
-<!-- ══════════ LOGIN SCREEN ══════════ -->
-<div id="loginScreen">
-  <div class="login-bg">
-    <div class="bg-orb bg-orb-1"></div>
-    <div class="bg-orb bg-orb-2"></div>
-    <div class="bg-orb bg-orb-3"></div>
-    <div class="login-grid"></div>
-  </div>
-
-  <div class="login-card">
-    <div class="login-logo-wrap">
-      <img src="/assets/hg-logo.png" alt="HG Logo">
-    </div>
-    <div class="login-brand">HG CHAT AI AGENT</div>
-    <div class="login-tagline">Agent Intelligence Platform</div>
-    <div class="login-divider"></div>
-    <div class="pin-label">Enter PIN to access</div>
-
-    <div class="pin-dots" id="pinDots">
-      <div class="pin-dot" id="d0"></div>
-      <div class="pin-dot" id="d1"></div>
-      <div class="pin-dot" id="d2"></div>
-      <div class="pin-dot" id="d3"></div>
-      <div class="pin-dot" id="d4"></div>
-      <div class="pin-dot" id="d5"></div>
-    </div>
-
-    <div class="numpad" id="numpad">
-      <button class="np-btn" onclick="pinPress('1')">1<span class="np-sub"></span></button>
-      <button class="np-btn" onclick="pinPress('2')">2<span class="np-sub">ABC</span></button>
-      <button class="np-btn" onclick="pinPress('3')">3<span class="np-sub">DEF</span></button>
-      <button class="np-btn" onclick="pinPress('4')">4<span class="np-sub">GHI</span></button>
-      <button class="np-btn" onclick="pinPress('5')">5<span class="np-sub">JKL</span></button>
-      <button class="np-btn" onclick="pinPress('6')">6<span class="np-sub">MNO</span></button>
-      <button class="np-btn" onclick="pinPress('7')">7<span class="np-sub">PQRS</span></button>
-      <button class="np-btn" onclick="pinPress('8')">8<span class="np-sub">TUV</span></button>
-      <button class="np-btn" onclick="pinPress('9')">9<span class="np-sub">WXYZ</span></button>
-      <button class="np-btn" style="visibility:hidden"></button>
-      <button class="np-btn" onclick="pinPress('0')">0</button>
-      <button class="np-btn del" onclick="pinDel()">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg>
-      </button>
-    </div>
-
-    <div class="login-status" id="loginStatus">Secured by HG Intelligence</div>
-  </div>
-
-  <div class="login-footer">
-    <img class="login-footer-logo" src="/assets/hg-logo.png" alt="HG">
-    HG Chat AI Agent &nbsp;·&nbsp; v1.0 &nbsp;·&nbsp; All rights reserved
-  </div>
-</div>
-
-<!-- ══════════ TRANSITION RIPPLE ══════════ -->
-<div id="transitionRipple">
-  <div class="ripple-circle" id="rippleCircle"></div>
-</div>
-
 <!-- ══════════ MAIN APP ══════════ -->
-<div id="mainApp">
+<div id="mainApp" class="visible">
 <div class="app-inner">
 
   <!-- TOP BAR -->
@@ -144,9 +86,9 @@
         <div id="sbAgents"></div>
       </div>
       <div class="sb-foot">
-        <div class="sb-user">
+        <div class="sb-user" onclick="logout()" title="Keluar dari HG Chat">
           <div class="sb-uavi"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-          <div class="sb-uinfo"><div class="sb-uname">Guest User</div><div class="sb-ustatus">Click to Sign In</div></div>
+          <div class="sb-uinfo"><div class="sb-uname" id="sbUname">…</div><div class="sb-ustatus" id="sbUstatus">Keluar</div></div>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
         </div>
         <div class="sb-ver">HG Chat AI Agent &nbsp;·&nbsp; v1.0</div>

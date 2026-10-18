@@ -139,14 +139,20 @@ form.addEventListener('submit', async (e) => {
       body: JSON.stringify({ username, password })
     });
     if (res.ok) {
-      status.textContent = 'Access granted. Welcome back!';
+      const data = await res.json().catch(() => ({}));
+      const name = data.user && data.user.displayName;
+      status.textContent = name ? 'Welcome back, ' + name + '!' : 'Access granted. Welcome back!';
       status.className = 'login-status ok';
       setTimeout(() => { location.href = '/'; }, 500);
-    } else {
-      throw new Error('invalid');
+      return;
     }
+    if (res.status === 429) {
+      const wait = Number(res.headers.get('Retry-After')) || 900;
+      throw new Error('Too many attempts. Try again in ' + Math.ceil(wait / 60) + ' minute(s).');
+    }
+    throw new Error('Invalid username or password.');
   } catch (err) {
-    status.textContent = 'Invalid username or password.';
+    status.textContent = err.message.startsWith('Too many') ? err.message : 'Invalid username or password.';
     status.className = 'login-status error';
     card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake');
     btn.disabled = false;

@@ -3,7 +3,8 @@
 # :8643, which serves this same folder). Dev gets its own port, media dir and
 # database under data/dev/ (gitignored), and restarts on file changes.
 #
-#   npm run dev                  # no login, no gateway (UI work)
+#   npm run dev:users -- add me  # create a dev account (once)
+#   npm run dev                  # no gateway (UI work)
 #   npm run dev -- --gateway     # also talk to the real OpenClaw agents
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -17,6 +18,12 @@ fi
 export CHAT_MEDIA_DIR="${CHAT_MEDIA_DIR:-$PWD/data/dev/media}"
 export CHAT_DB_PATH="${CHAT_DB_PATH:-$PWD/data/dev/chat-center.db}"
 mkdir -p "$CHAT_MEDIA_DIR" "$(dirname "$CHAT_DB_PATH")"
+
+# `npm run dev:users -- add me` manages accounts in the dev database.
+if [ "${1:-}" = "users" ]; then
+  shift
+  exec node scripts/users.js "$@"
+fi
 
 if [ "${1:-}" = "--gateway" ]; then
   envfile="${CHAT_ENV_FILE:-$HOME/.config/chat-center.env}"

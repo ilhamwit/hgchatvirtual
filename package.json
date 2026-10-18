@@ -10,6 +10,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "bash scripts/dev.sh",
+    "dev:users": "bash scripts/dev.sh users",
+    "users": "node scripts/users.js",
     "test": "node --test test/",
     "gates": "bash scripts/qa.sh && bash scripts/test.sh && bash scripts/security-check.sh"
   }

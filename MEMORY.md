@@ -18,7 +18,11 @@ it stops being true. Durable decisions also go in the owning epic's Automation L
   as an absolute path.
 - Node v26.8.1 on the host: `node:sqlite` and `node:test` are available.
 - Only `public/` is served over HTTP. `server.js` refuses to start without
-  `GATEWAY_TOKEN`, `CHAT_USER`, `CHAT_PASS`, `CHAT_SECRET` unless `CHAT_DEV=1`.
+  `GATEWAY_TOKEN` or with zero active users, unless `CHAT_DEV=1`.
+- Accounts (EPIC-001): SQLite `data/chat-center.db` via `lib/db.js` (migrations
+  in `PRAGMA user_version`); `lib/auth.js` = scrypt, sessions stored as SHA-256
+  of the cookie token (`hgchat_session`), 5 fails/15 min limiter (in memory).
+  Admin CLI: `node scripts/users.js`.
   `npm run dev` = dev instance on :8650 with data in `data/dev/`.
 - `npm run gates` runs qa + test (unit + boot smoke) + security.
 

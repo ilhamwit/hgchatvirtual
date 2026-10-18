@@ -1,7 +1,3 @@
-/* ── PIN LOGIN ───────────────────────────── */
-const CORRECT_PIN = '101010';
-let pinVal = '';
-
 // ─── Openclaw Gateway integration ───────────────
 const OPENCLAW_URL = '/v1/chat/completions'; // relative — proxied by server.js
 // No token here on purpose: server.js injects the gateway token on the proxy
@@ -36,73 +32,25 @@ async function askAgent(agentId, message, signal) {
   return content;
 }
 
-function pinPress(n) {
-  if(pinVal.length >= 6) return;
-  pinVal += n;
-  updateDots();
-  if(pinVal.length === 6) setTimeout(checkPin, 120);
+/* ── SESSION ─────────────────────────────── */
+// The server checked the login before serving this page; this only shows who
+// is signed in and wires up logout.
+async function loadMe() {
+  try {
+    const res = await fetch('/api/me');
+    if (res.status === 401) { location.href = '/login'; return; }
+    if (!res.ok) return;
+    const me = await res.json();
+    document.getElementById('sbUname').textContent = me.displayName;
+    document.getElementById('sbUstatus').textContent = (me.role === 'admin' ? 'Admin · ' : '') + 'Keluar';
+  } catch (e) { /* offline: keep the placeholder */ }
 }
 
-function pinDel() {
-  if(!pinVal.length) return;
-  pinVal = pinVal.slice(0,-1);
-  updateDots();
-  setStatus('Secured by HG Intelligence','');
+async function logout() {
+  try { await fetch('/logout', { method: 'POST' }); } finally { location.href = '/login'; }
 }
 
-function updateDots() {
-  for(let i=0;i<6;i++) {
-    const d = document.getElementById('d'+i);
-    d.className = 'pin-dot' + (i < pinVal.length ? ' filled' : '');
-  }
-}
-
-function setStatus(msg, cls) {
-  const s = document.getElementById('loginStatus');
-  s.textContent = msg;
-  s.className = 'login-status' + (cls ? ' '+cls : '');
-}
-
-function checkPin() {
-  if(pinVal === CORRECT_PIN) {
-    // Success
-    for(let i=0;i<6;i++) document.getElementById('d'+i).className='pin-dot success';
-    setStatus('Access granted. Welcome back!','ok');
-    document.getElementById('numpad').style.opacity = '.4';
-    document.getElementById('numpad').style.pointerEvents = 'none';
-    setTimeout(doTransition, 700);
-  } else {
-    // Error
-    for(let i=0;i<6;i++) document.getElementById('d'+i).className='pin-dot error';
-    setStatus('Incorrect PIN. Please try again.','error');
-    document.getElementById('pinDots').classList.add('shake');
-    setTimeout(()=>{
-      document.getElementById('pinDots').classList.remove('shake');
-      pinVal=''; updateDots();
-      setStatus('Secured by HG Intelligence','');
-    }, 700);
-  }
-}
-
-function doTransition() {
-  const ripple = document.getElementById('rippleCircle');
-  ripple.classList.add('expand');
-  setTimeout(()=>{
-    document.getElementById('loginScreen').classList.add('exit');
-    document.getElementById('mainApp').classList.add('visible');
-    setTimeout(()=>{
-      document.getElementById('loginScreen').style.display='none';
-      ripple.style.display='none';
-    },600);
-  },400);
-}
-
-// Keyboard support for login
-document.addEventListener('keydown', e=>{
-  if(document.getElementById('loginScreen').style.display==='none') return;
-  if(e.key>='0'&&e.key<='9') pinPress(e.key);
-  else if(e.key==='Backspace') pinDel();
-});
+loadMe();
 
 /* ── AGENTS ─────────────────────────────── */
 const IMGS = {

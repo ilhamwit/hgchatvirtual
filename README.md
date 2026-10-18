@@ -20,6 +20,8 @@ browser ──▶ Cloudflare Tunnel ──▶ server.js (127.0.0.1:8643) ──�
 | Path | Isi |
 | --- | --- |
 | `server.js` | HTTP server: login, static `public/`, upload, proxy ke gateway |
+| `lib/` | `db.js` (SQLite + migrasi), `auth.js` (akun, scrypt, sesi, rate limit) |
+| `data/` | Database `chat-center.db` (gitignored, mode 600) |
 | `public/` | Satu-satunya folder yang bisa diakses lewat HTTP (`index.html`, `login.html`, `app.js`, `style.css`, `assets/`) |
 | `test/` | Unit test (`node:test`) |
 | `scripts/` | Gate (`qa.sh`, `test.sh`, `security-check.sh`), `dev.sh`, helper loop |
@@ -30,8 +32,9 @@ browser ──▶ Cloudflare Tunnel ──▶ server.js (127.0.0.1:8643) ──�
 Butuh Node.js ≥ 22.5 (server memakai Node v26). Tanpa dependency npm.
 
 ```bash
-npm run dev                # http://127.0.0.1:8650 — tanpa login, tanpa gateway (kerja UI)
-npm run dev -- --gateway   # sama, tapi tersambung ke agent OpenClaw sungguhan
+npm run dev:users -- add saya --admin   # sekali: buat akun di database dev
+npm run dev                             # http://127.0.0.1:8650 — tanpa gateway (kerja UI)
+npm run dev -- --gateway                # sama, tapi tersambung ke agent OpenClaw sungguhan
 ```
 
 Dev memakai port, folder upload, dan database sendiri di `data/dev/`
@@ -42,8 +45,27 @@ Catatan: dengan `--gateway`, chat dev membuat sesi OpenClaw sungguhan.
 
 Semua variabel didokumentasikan di [`.env.example`](.env.example). Nilai
 production ada di `~/.config/chat-center.env` (dibaca systemd, tidak di git).
-`server.js` **menolak start** bila `GATEWAY_TOKEN`, `CHAT_USER`, `CHAT_PASS`,
-atau `CHAT_SECRET` kosong, atau bila angka tidak valid — kecuali `CHAT_DEV=1`.
+`server.js` **menolak start** bila `GATEWAY_TOKEN` kosong, angka tidak valid,
+atau belum ada satu pun user aktif — kecuali `CHAT_DEV=1`.
+
+## Akun tim
+
+Setiap anggota tim punya akun sendiri (password di-hash scrypt, minimal 10
+karakter). Kelola dari folder ini; perubahan langsung berlaku tanpa restart.
+Password selalu diminta lewat prompt tersembunyi, tidak pernah sebagai argumen.
+
+```bash
+node scripts/users.js add irfan --name "Irfan"        # anggota
+node scripts/users.js add ilham --name "Ilham" --admin
+node scripts/users.js list
+node scripts/users.js reset-password irfan            # juga mengakhiri sesinya
+node scripts/users.js disable irfan                   # blokir + logout di semua perangkat
+node scripts/users.js enable irfan
+node scripts/users.js revoke-sessions irfan           # logout di semua perangkat
+```
+
+Login gagal 5× dalam 15 menit (per IP atau per username) → 429 sampai jendela
+lewat. Sesi berlaku 30 hari; tombol nama di pojok kiri bawah = keluar.
 
 ## Cek kualitas
 
@@ -62,5 +84,10 @@ Gate juga dijalankan oleh workflow agentic (lihat `CLAUDE.md`, `.agentic/config.
    ```
 3. Cek: `systemctl status chat-center` dan buka agents.herrygunawan.com.
 4. Gagal start? `journalctl -u chat-center -n 30` — pesan `config error` menyebut variabel yang salah.
+
+Rilis pertama dengan akun per orang (EPIC-001): buat akun **sebelum** restart,
+karena server menolak start tanpa user aktif. Setelah restart semua orang login
+ulang dengan akunnya sendiri; `CHAT_USER`, `CHAT_PASS`, `CHAT_SECRET` di
+`~/.config/chat-center.env` tidak dipakai lagi dan boleh dihapus.
 
 Rollback: `git checkout <commit-sebelumnya> -- server.js public/` lalu restart.

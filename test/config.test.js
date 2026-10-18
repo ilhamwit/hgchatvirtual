@@ -1,80 +1,59 @@
-// EPIC-000 T-004: server.js must refuse to start with missing or invalid
-// config, and start normally in explicit dev mode.
+// EPIC-000 T-004 / EPIC-001: server.js must refuse to start with missing or
+// invalid config, or with no account to log in with.
 const test = require('node:test');
 const assert = require('node:assert');
-const { spawn } = require('node:child_process');
 const path = require('node:path');
-const os = require('node:os');
 const fs = require('node:fs');
-const net = require('node:net');
+const { freePort, tempDir, seedDb, runServer } = require('./helpers');
 
-const SERVER = path.join(__dirname, '..', 'server.js');
+const ADMIN = { username: 'admin', password: 'admin-password-1', role: 'admin' };
 
-function freePort() {
-  return new Promise((resolve) => {
-    const s = net.createServer().listen(0, '127.0.0.1', () => {
-      const { port } = s.address();
-      s.close(() => resolve(port));
-    });
-  });
+async function dbWith(users) {
+  const dir = tempDir();
+  const file = await seedDb(path.join(dir, 't.db'), users);
+  return { file, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 
-// Runs server.js with exactly `env` (plus PATH/HOME) and resolves with its exit
-// code and output, or with { listening: true } once it prints its banner.
-function run(env) {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-center-test-'));
-  const child = spawn(process.execPath, [SERVER], {
-    env: { PATH: process.env.PATH, HOME: home, CHAT_MEDIA_DIR: home, ...env }
-  });
-  let out = '';
-  let done = false;
-  let timer;
-  return new Promise((resolve) => {
-    const finish = (result) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      child.kill();
-      fs.rmSync(home, { recursive: true, force: true });
-      resolve({ ...result, out });
-    };
-    child.stdout.on('data', (d) => {
-      out += d;
-      if (out.includes('server running')) finish({ listening: true });
-    });
-    child.stderr.on('data', (d) => { out += d; });
-    child.on('exit', (code) => finish({ code }));
-    timer = setTimeout(() => finish({ timeout: true }), 5000);
-  });
+async function start(env) {
+  const r = await runServer({ CHAT_PORT: String(await freePort()), ...env });
+  await r.stop();
+  return r;
 }
 
-const PROD_ENV = { GATEWAY_TOKEN: 'test-token', CHAT_USER: 'u', CHAT_PASS: 'p', CHAT_SECRET: 's' };
-
-test('refuses to start without required env and names the missing variables', async () => {
-  const r = await run({ CHAT_PORT: String(await freePort()) });
+test('refuses to start without GATEWAY_TOKEN and names it', async () => {
+  const db = await dbWith([ADMIN]);
+  const r = await start({ CHAT_DB_PATH: db.file });
+  db.cleanup();
   assert.strictEqual(r.code, 1);
-  for (const k of ['GATEWAY_TOKEN', 'CHAT_USER', 'CHAT_PASS', 'CHAT_SECRET']) assert.match(r.out, new RegExp(k));
+  assert.match(r.out, /missing required env GATEWAY_TOKEN/);
 });
 
-test('names only the variable that is missing', async () => {
-  const { GATEWAY_TOKEN, ...rest } = PROD_ENV;
-  const r = await run({ ...rest, CHAT_PORT: String(await freePort()) });
+test('refuses to start in production with no active users', async () => {
+  const db = await dbWith([]);
+  const r = await start({ GATEWAY_TOKEN: 't', CHAT_DB_PATH: db.file });
+  db.cleanup();
   assert.strictEqual(r.code, 1);
-  assert.match(r.out, /missing required env GATEWAY_TOKEN /);
+  assert.match(r.out, /no active users — create one with: node scripts\/users\.js add/);
 });
 
 test('rejects a non-numeric port', async () => {
-  const r = await run({ ...PROD_ENV, CHAT_PORT: 'eighty' });
+  const r = await runServer({ GATEWAY_TOKEN: 't', CHAT_PORT: 'eighty' });
+  await r.stop();
   assert.strictEqual(r.code, 1);
   assert.match(r.out, /CHAT_PORT must be an integer/);
 });
 
-test('starts with complete production env', async () => {
-  const r = await run({ ...PROD_ENV, CHAT_PORT: String(await freePort()) });
+test('starts with a gateway token and at least one user', async () => {
+  const db = await dbWith([ADMIN]);
+  const r = await start({ GATEWAY_TOKEN: 't', CHAT_DB_PATH: db.file });
+  db.cleanup();
   assert.ok(r.listening, r.out);
 });
 
-test('starts in CHAT_DEV=1 mode with nothing else set', async () => {
-  const r = await run({ CHAT_DEV: '1', CHAT_PORT: String(await freePort()) });
+test('CHAT_DEV=1 starts with nothing set and warns that there are no users', async () => {
+  const db = await dbWith([]);
+  const r = await start({ CHAT_DEV: '1', CHAT_DB_PATH: db.file });
+  db.cleanup();
   assert.ok(r.listening, r.out);
+  assert.match(r.out, /Warning: no active users/);
 });

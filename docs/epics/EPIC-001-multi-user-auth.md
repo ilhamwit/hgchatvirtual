@@ -1,6 +1,6 @@
 # EPIC-001: Akun per Orang & Sesi Login
 
-status: backlog
+status: ready-for-qa
 environment: dev
 phase: 1
 priority: P0
@@ -30,18 +30,18 @@ terpisah per orang. Pembatasan per agent bisa ditambah lewat role nanti.
 
 ### Database & model user
 
-- [ ] **T-006** SQLite via `node:sqlite` (bawaan Node, tanpa dependency) di `CHAT_DB_PATH`; migrasi skema bertahap; tabel `users` (id, username, display_name, password_hash, role `admin|member`, disabled, created_at).
+- [x] **T-006** SQLite via `node:sqlite` (bawaan Node, tanpa dependency) di `CHAT_DB_PATH`; migrasi skema bertahap; tabel `users` (id, username, display_name, password_hash, role `admin|member`, disabled, created_at).
 
 ### Login & sesi
 
-- [ ] **T-007** Password di-hash dengan `crypto.scrypt` + salt per user; perbandingan timing-safe.
-- [ ] **T-008** Tabel `sessions` (token acak 32 byte, disimpan sebagai hash; user_id, created_at, expires_at, last_seen, user_agent); cookie `HttpOnly; Secure; SameSite=Lax`; endpoint `POST /logout`; sesi kedaluwarsa otomatis.
-- [ ] **T-009** Rate limit login per IP + per username (mis. 5 gagal / 15 menit) dengan respons 429.
+- [x] **T-007** Password di-hash dengan `crypto.scrypt` + salt per user; perbandingan timing-safe.
+- [x] **T-008** Tabel `sessions` (token acak 32 byte, disimpan sebagai hash; user_id, created_at, expires_at, last_seen, user_agent); cookie `HttpOnly; Secure; SameSite=Lax`; endpoint `POST /logout`; sesi kedaluwarsa otomatis.
+- [x] **T-009** Rate limit login per IP + per username (mis. 5 gagal / 15 menit) dengan respons 429.
 
 ### Admin & bersih-bersih
 
-- [ ] **T-010** CLI `node scripts/users.js add|disable|enable|reset-password|list|revoke-sessions`; akun pertama dibuat dari CLI.
-- [ ] **T-011** Hapus PIN `101010` dan layar PIN dari frontend; ganti `login.html` ke alur akun baru; hapus header CORS `*`; hapus jalur Basic auth dan `CHAT_USER`/`CHAT_PASS` dari env.
+- [x] **T-010** CLI `node scripts/users.js add|disable|enable|reset-password|list|revoke-sessions`; akun pertama dibuat dari CLI.
+- [x] **T-011** Hapus PIN `101010` dan layar PIN dari frontend; ganti `login.html` ke alur akun baru; hapus header CORS `*`; hapus jalur Basic auth dan `CHAT_USER`/`CHAT_PASS` dari env.
 
 ## Acceptance Criteria
 
@@ -63,6 +63,14 @@ terpisah per orang. Pembatasan per agent bisa ditambah lewat role nanti.
 ## Automation Log
 
 - 2026-10-18 Epic dibuat; keputusan: pengguna = tim internal, semua user boleh pakai semua agent — backlog
+- 2026-10-18 Status → on-progress. Dikerjakan di git worktree `../chat-center-epic-001` (branch `epic-001`), bukan di folder production, karena restart EPIC-000 belum terjadi dan folder itu disajikan langsung — on-progress
+- 2026-10-18 T-006/T-007: `lib/db.js` (node:sqlite, WAL, foreign keys, migrasi via `PRAGMA user_version`, file 600 di dir 700) + tabel `users`; `lib/auth.js` scrypt N=2^15 (~50 ms) + salt 16 byte, verifikasi timing-safe, dummy hash untuk username tak dikenal — done
+- 2026-10-18 T-008: tabel `sessions` (SHA-256 token, expires 30 hari, last_seen di-throttle 5 menit, user_agent); cookie `hgchat_session` HttpOnly/SameSite=Lax/Secure di https; `POST /logout`; `GET /api/me`; sesi kedaluwarsa dihapus saat dipakai + purge per jam. Ditemukan & diperbaiki: proxy `/v1/*` meneruskan cookie browser ke gateway — kini header cookie dibuang — done
+- 2026-10-18 T-009: rate limit in-memory 5 gagal/15 menit per IP (CF-Connecting-IP hanya dipercaya dari loopback) dan per username → 429 + Retry-After; login sukses hanya mereset counter username — done
+- 2026-10-18 T-010: `scripts/users.js` add/reset-password/disable/enable/revoke-sessions/list; password via prompt tersembunyi atau stdin (bukan argumen); disable & reset-password mengakhiri sesi; `npm run dev:users` untuk DB dev — done
+- 2026-10-18 T-011: layar PIN + ripple dihapus dari `public/index.html`/`app.js`; sidebar menampilkan nama user + tombol Keluar; `login.html` menampilkan pesan 429; Basic auth, `CHAT_USER`/`CHAT_PASS`/`CHAT_SECRET`, header CORS, dan handler OPTIONS dihapus. Server menolak start tanpa user aktif (kecuali dev) — done
+- 2026-10-18 Test: 22 test node:test (8 unit auth, 5 config, 9 end-to-end atas server.js asli: dua user bersamaan, cookie flags, 401/429, logout, disable/revoke via CLI langsung berlaku, tanpa CORS/PIN/Basic). `test.sh` smoke kini membuat akun sekali pakai dan login. `npm run gates` PASS (2 warning: PIN di file root lama yang dihapus setelah restart; proxy /v1/* → EPIC-002) — done
+- 2026-10-18 Status → ready-for-qa. QA/rilis manusia: merge `epic-001` ke `main`, buat akun tim dengan `node scripts/users.js add …` SEBELUM restart (server menolak start tanpa user), restart, uji login dua orang + chat + Keluar di agents.herrygunawan.com — ready-for-qa
 
 ## Dependencies
 
