@@ -150,12 +150,13 @@ Gate juga dijalankan oleh workflow agentic (lihat `CLAUDE.md`, `.agentic/config.
 
 ## Rilis ke production
 
-1. Pastikan `npm run gates` PASS dan perubahan sudah di-commit.
-2. Restart service (manusia, bukan agent):
+1. Pastikan perubahan sudah di-commit di `main`.
+2. Restart (manusia, bukan agent) — skrip ini menjalankan gate dulu, restart,
+   lalu membuktikan PID berganti dan `/healthz` sehat:
    ```bash
-   sudo systemctl restart chat-center
+   bash "/home/hg/Documents/Chat Center/scripts/restart.sh"
    ```
-3. Cek: `systemctl status chat-center` dan buka agents.herrygunawan.com.
+3. Buka agents.herrygunawan.com dan coba login + chat.
 4. Gagal start? `journalctl -u chat-center -n 30` — pesan `config error` menyebut variabel yang salah.
 
 Rilis pertama dengan akun per orang (EPIC-001): buat akun **sebelum** restart,
