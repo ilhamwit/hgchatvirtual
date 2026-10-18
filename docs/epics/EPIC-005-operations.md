@@ -61,6 +61,7 @@ hanya baris start di journald.
 - 2026-10-18 Status → ready-for-qa. Rilis: merge → restart chat-center (migrasi 3 otomatis) → pasang timer (`bash scripts/install-backup-timer.sh`) → cek `/healthz` dan backup pertama — ready-for-qa
 - 2026-10-18 Rilis lewat `scripts/restart.sh` (user): gate PASS, PID 221120 → 240756, schema v3, `/healthz` lokal & publik `{"ok":true,"db":"ok","hermes":"ok"}`. Tersisa: pasang timer backup (menunggu OK user) — ready-for-qa
 - 2026-10-18 Atas OK user: `scripts/install-backup-timer.sh` → `chat-center-backup.timer` enabled (user unit, linger aktif), jadwal berikutnya Sen 2026-10-19 03:21 WIB (03:15 + jitter). Backup pertama lewat systemd: `data/backups/chat-center-20261018-224422.db`, 72 KB, schema v3, users=4 conversations=6 messages=24, `--verify` OK, file 600/dir 700. Catatan: backup masih di disk yang sama; salinan off-machine (`CHAT_BACKUP_COPY_DIR`) menunggu keputusan lokasi dari user — done
+- 2026-10-19 Atas permintaan pemilik (restart tanpa sudo, bukan memberi sudo penuh): chat-center dipindah ke user service akun hg seperti hermes-gateway — `deploy/systemd/chat-center.service` + `scripts/install-user-service.sh` (sekali jalan, sudo sekali untuk mematikan service sistem, rollback otomatis bila tidak sehat); `scripts/restart.sh` memilih user service bila ada, tanpa sudo. Linger akun hg sudah aktif. Menunggu pemilik menjalankan skrip pindah.
 
 ## Dependencies
 

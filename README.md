@@ -121,15 +121,15 @@ systemctl --user list-timers chat-center-backup.timer    # kapan backup berikutn
 journalctl --user -u chat-center-backup -n 20            # hasil backup terakhir
 ```
 
-Restore (manusia, butuh sudo untuk stop/start):
+Restore (manusia):
 
 ```bash
-sudo systemctl stop chat-center
+systemctl --user stop chat-center
 cd "/home/hg/Documents/Chat Center"
 node scripts/backup.js --verify data/backups/<file>.db
 mkdir -p data/before-restore && mv data/chat-center.db* data/before-restore/
 cp data/backups/<file>.db data/chat-center.db && chmod 600 data/chat-center.db
-sudo systemctl start chat-center
+systemctl --user start chat-center
 ```
 
 ### WhatsApp Hermes (Koneksikan WA)
@@ -183,7 +183,7 @@ pesan pertama.
 - `GET /healthz` (tanpa login): `200 {"ok":true,"db":"ok","hermes":"ok"}`, atau
   `503` bila database/Hermes bermasalah. Pakai untuk uptime monitor.
 - Log request: satu baris per request di journald, tanpa query string, cookie,
-  atau isi pesan: `journalctl -u chat-center | grep ' req '`.
+  atau isi pesan: `journalctl --user-unit=chat-center | grep ' req '`.
 - Audit login & perubahan akun (disimpan 180 hari): `node scripts/users.js audit 50`.
 
 ## Cek kualitas
@@ -196,14 +196,22 @@ Gate juga dijalankan oleh workflow agentic (lihat `CLAUDE.md`, `.agentic/config.
 
 ## Rilis ke production
 
+chat-center berjalan sebagai **user service** akun `hg` (seperti
+`hermes-gateway`): unit `~/.config/systemd/user/chat-center.service`, sumbernya
+`deploy/systemd/chat-center.service`. Linger akun membuatnya tetap hidup tanpa
+login dan menyala saat boot. Pindah dari service sistem lama dilakukan sekali
+dengan `bash scripts/install-user-service.sh` (minta sudo sekali untuk
+mematikan service sistem; kembali otomatis ke service sistem bila user service
+tidak sehat).
+
 1. Pastikan perubahan sudah di-commit di `main`.
-2. Restart (manusia, bukan agent) — skrip ini menjalankan gate dulu, restart,
-   lalu membuktikan PID berganti dan `/healthz` sehat:
+2. Restart — skrip ini menjalankan gate dulu, restart (tanpa sudo setelah
+   pindah ke user service), lalu membuktikan PID berganti dan `/healthz` sehat:
    ```bash
    bash "/home/hg/Documents/Chat Center/scripts/restart.sh"
    ```
 3. Buka agents.herrygunawan.com dan coba login + chat.
-4. Gagal start? `journalctl -u chat-center -n 30` — pesan `config error` menyebut variabel yang salah.
+4. Gagal start? `journalctl --user-unit=chat-center -n 30` — pesan `config error` menyebut variabel yang salah.
 
 Rilis pertama dengan akun per orang (EPIC-001): buat akun **sebelum** restart,
 karena server menolak start tanpa user aktif. Setelah restart semua orang login

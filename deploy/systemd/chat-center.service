@@ -1,0 +1,19 @@
+# Chat Center as a user service of hg (like hermes-gateway), so restarting it
+# needs no sudo. Installed by scripts/install-user-service.sh into
+# ~/.config/systemd/user/. Linger on the account keeps it running without a
+# login and starts it at boot.
+[Unit]
+Description=Chat Center (HG Chat AI Agent)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Documents/Chat Center
+EnvironmentFile=%h/.config/chat-center.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
