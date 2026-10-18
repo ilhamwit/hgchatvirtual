@@ -153,6 +153,23 @@ masuk audit log (`wa_pair_*`, `wa_number_changed`).
 
 Web tidak pernah menghentikan/me-restart Hermes sendiri; itu hanya `wa-apply.sh`.
 
+### Grup WhatsApp (Pilih Group, Summary Chating)
+
+Sumbernya arsip grup milik bridge Hermes (`WHATSAPP_GROUP_ARCHIVE`, saat ini
+`~/.hermes/whatsapp/group_archive.jsonl`). Chat Center hanya **membaca** file
+itu (inkremental, dari byte terakhir) ke tabel `wa_messages`; nama grup diambil
+dari bridge (`GET /chat/<id>`) dan di-cache 6 jam. Semua user yang login bisa
+membaca semua grup tempat bot berada.
+
+- **Pilih Group**: daftar grup → chat read-only (per hari, muat yang lebih lama,
+  diperbarui tiap 15 dtk).
+- **Summary Chating**: grup + rentang tanggal (maks 92 hari / 5000 pesan) +
+  agent (default Dave) → diringkas oleh agent Hermes di latar belakang; rentang
+  panjang dipecah per bagian lalu digabung. Hasil tersimpan di `wa_summaries`.
+
+Keterbatasan: riwayat hanya sejak arsip aktif; balasan bot sendiri tidak ikut
+diarsip oleh bridge; media hanya label; grup muncul setelah ada pesan pertama.
+
 ### Health, log, audit
 
 - `GET /healthz` (tanpa login): `200 {"ok":true,"db":"ok","hermes":"ok"}`, atau

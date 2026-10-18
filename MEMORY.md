@@ -28,6 +28,12 @@ it stops being true. Durable decisions also go in the owning epic's Automation L
   start, verify, roll back on failure). The web must never control
   hermes-gateway — the owner chose this design after the auto-mode
   classifier refused web-triggered restarts (2026-10-18).
+- WhatsApp groups (Pilih Group / Summary Chating): read-only index of the
+  bridge's group archive (`WHATSAPP_GROUP_ARCHIVE`, set in ~/.hermes/.env)
+  into `wa_messages` (migration 4; offset + inode + head hash, so rotation is
+  safe). Group policy in Hermes is `open` + `require_mention: true`. A Hermes
+  cron `wa-group-summary` (every 6 h) already posts digests to a group —
+  separate from the web summaries.
 - OpenClaw is retired: `openclaw-gateway` (user service) was stopped and disabled
   on 2026-10-18 because it polled the same Telegram bots as Hermes.
 - The browser never reaches Hermes: `lib/api.js` (/api/*) stores messages in

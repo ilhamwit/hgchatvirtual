@@ -186,21 +186,46 @@ function splitRow(l) {
 function para(lines) { return lines.length ? '<p>'+lines.join('<br>')+'</p>' : ''; }
 
 // Splits a block into the prose, the table, and whatever follows it.
+const MD_UL = /^\s*[-•*]\s+/;
+const MD_OL = /^\s*\d+[.)]\s+/;
+
+// Lines of one block, in order: "#…" headings, runs of list items, and the
+// rest as paragraphs — so "## Title" directly followed by "- item" lines
+// (how agents write summaries) renders as a heading plus a list.
 function renderBlock(lines) {
   if(!lines.length) return '';
   const t = findTable(lines);
   if(t) {
-    return para(lines.slice(0, t.start)) +
+    return renderBlock(lines.slice(0, t.start)) +
       renderTable(lines.slice(t.start, t.end)) +
       renderBlock(lines.slice(t.end));
   }
-  if(lines.every(l=>/^\s*[-•]\s+/.test(l))) {
-    return '<ul>'+lines.map(l=>'<li>'+l.replace(/^\s*[-•]\s+/,'')+'</li>').join('')+'</ul>';
+  let html = '';
+  let run = [];
+  let kind = null;
+  const flush = () => {
+    if(!run.length) return;
+    if(kind === 'ul') html += '<ul>'+run.map(l=>'<li>'+l.replace(MD_UL,'')+'</li>').join('')+'</ul>';
+    else if(kind === 'ol') html += '<ol>'+run.map(l=>'<li>'+l.replace(MD_OL,'')+'</li>').join('')+'</ol>';
+    else html += para(run);
+    run = [];
+    kind = null;
+  };
+  for(const l of lines) {
+    const h = l.match(/^\s*(#{1,4})\s+(.+)$/);
+    if(h) {
+      flush();
+      const level = h[1].length + 1;                        // "#" -> h2 … "####" -> h5
+      html += `<h${level} class="md-h">${h[2]}</h${level}>`;
+      continue;
+    }
+    const k = MD_UL.test(l) ? 'ul' : MD_OL.test(l) ? 'ol' : 'p';
+    if(k !== kind) flush();
+    kind = k;
+    run.push(l);
   }
-  if(lines.every(l=>/^\s*\d+[.)]\s+/.test(l))) {
-    return '<ol>'+lines.map(l=>'<li>'+l.replace(/^\s*\d+[.)]\s+/,'')+'</li>').join('')+'</ol>';
-  }
-  return para(lines);
+  flush();
+  return html;
 }
 
 function renderTable(lines) {
@@ -679,17 +704,18 @@ function openWaPage(key) {
   document.querySelector('.chat').classList.add('hidden');
   document.getElementById('waView').classList.remove('hidden');
   // Pages with a real feature replace the "Segera hadir" card.
-  const real = key === 'connect';
-  document.getElementById('waBody').classList.toggle('hidden', real);
-  document.getElementById('waConnect').classList.toggle('hidden', !real);
-  if (real) waConnectOpen(); else waConnectClose();
+  closeWaPages();
+  const impl = WA_IMPL[key];
+  document.getElementById('waBody').classList.toggle('hidden', !!impl);
+  for (const [k, p] of Object.entries(WA_IMPL)) document.getElementById(p.el).classList.toggle('hidden', k !== key);
+  if (impl) impl.open();
   if (location.hash !== '#wa-' + key) history.replaceState(null, '', '#wa-' + key);
 }
 
 function showChatView() {
   if (!waPage) return;
   waPage = null;
-  waConnectClose();
+  closeWaPages();
   document.getElementById('waView').classList.add('hidden');
   document.getElementById('socketsPanel').classList.remove('hidden');
   document.querySelector('.chat').classList.remove('hidden');
@@ -794,6 +820,223 @@ function renderWaConnect(s) {
     <div class="wa-box"><h3>${s.account ? 'Ganti nomor' : 'Hubungkan nomor'}</h3>${pair}${cancel}</div>
   </div>`;
 }
+
+/* ── Shared helpers for the group pages ── */
+const WA_AVATAR_COLORS = ['#C9A84C', '#2563EB', '#16A34A', '#7C3AED', '#EA580C', '#0891B2', '#DB2777', '#4B5563'];
+function waColor(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return WA_AVATAR_COLORS[h % WA_AVATAR_COLORS.length]; }
+function waGroupName(g) { return g.name || ('Grup ' + String(g.id).replace(/@.*/, '').slice(-6)); }
+function waDay(ts) { return new Date(ts).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
+function waClock(ts) { return new Date(ts).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }); }
+function waIsoDay(d) { const p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
+const WA_LIMITS_NOTE = 'Diambil dari arsip grup bot Hermes: riwayat ada sejak arsip aktif, balasan bot sendiri tidak tercatat, media hanya berupa label.';
+
+/* ── Pilih Group (EPIC-008 T-043): groups the bot is in, read-only chat ── */
+const waG = { groups: [], current: null, messages: [], hasMore: false, timer: null };
+
+function waGroupsOpen() {
+  waGroupsClose();
+  const el = document.getElementById('waGroupsPage');
+  el.innerHTML = `<div class="wag-list"><div class="wag-list-head">Grup WhatsApp <button class="wa-btn ghost" type="button" style="padding:5px 10px" onclick="waGroupsRefresh(true)">Muat ulang</button></div>
+    <div class="wag-note">${WA_LIMITS_NOTE}</div><div class="wag-items" id="wagItems"><div class="wag-empty">Memuat…</div></div></div>
+    <div class="wag-chat" id="wagChat"><div class="wag-empty">Pilih grup di sebelah kiri untuk membaca percakapannya.</div></div>`;
+  waG.current = null;
+  waGroupsRefresh(true);
+  waG.timer = setInterval(() => waGroupsRefresh(false), 15000);
+}
+
+function waGroupsClose() { clearInterval(waG.timer); waG.timer = null; }
+
+async function waGroupsRefresh(showErrors) {
+  try {
+    waG.groups = (await api('GET', '/api/wa/groups')).groups;
+  } catch (e) {
+    if (showErrors) document.getElementById('wagItems').innerHTML = `<div class="wag-empty">Gagal memuat grup: ${escapeHtml(e.message)}</div>`;
+    return;
+  }
+  if (waPage !== 'groups') return;
+  renderWaGroupList();
+  if (waG.current) waLoadMessages(false);
+}
+
+function renderWaGroupList() {
+  const el = document.getElementById('wagItems');
+  if (!el) return;
+  if (!waG.groups.length) {
+    el.innerHTML = '<div class="wag-empty">Belum ada pesan grup di arsip. Grup muncul setelah ada pesan pertama sejak arsip aktif.</div>';
+    return;
+  }
+  el.innerHTML = waG.groups.map((g) => {
+    const name = waGroupName(g);
+    const last = g.last ? escapeHtml(g.last.sender + ': ' + g.last.text) : '';
+    return `<div class="wag-item${waG.current === g.id ? ' on' : ''}" onclick="waOpenGroup('${escapeAttr(g.id)}')">
+      <div class="wag-avi" style="background:${waColor(g.id)}">${escapeHtml(name.charAt(0).toUpperCase())}</div>
+      <div class="wag-info"><div class="wag-row1"><span class="wag-name">${escapeHtml(name)}</span><span class="wag-time">${fmtTime(g.lastTs)}</span></div>
+      <div class="wag-meta">${g.participants ? g.participants + ' anggota · ' : ''}${g.messageCount} pesan</div>
+      <div class="wag-prev">${last}</div></div></div>`;
+  }).join('');
+}
+
+function waOpenGroup(id) {
+  waG.current = id;
+  waG.messages = [];
+  renderWaGroupList();
+  waLoadMessages(true);
+}
+
+// fresh=true: first page of a newly opened group. false: periodic refresh.
+async function waLoadMessages(fresh) {
+  const id = waG.current;
+  let data;
+  try { data = await api('GET', '/api/wa/groups/' + encodeURIComponent(id) + '/messages?limit=150'); }
+  catch (e) { if (fresh) document.getElementById('wagChat').innerHTML = `<div class="wag-empty">Gagal memuat pesan: ${escapeHtml(e.message)}</div>`; return; }
+  if (waG.current !== id || waPage !== 'groups') return;
+  const newest = waG.messages.length ? waG.messages[waG.messages.length - 1].id : 0;
+  const latest = data.messages.length ? data.messages[data.messages.length - 1].id : 0;
+  if (!fresh && latest === newest) return;
+  const box = document.getElementById('wagMsgs');
+  const atBottom = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  waG.messages = data.messages;
+  waG.hasMore = data.hasMore;
+  renderWaChat(data.group, fresh || atBottom ? 'bottom' : 'keep');
+}
+
+async function waLoadOlder() {
+  const id = waG.current;
+  if (!waG.messages.length) return;
+  const data = await api('GET', '/api/wa/groups/' + encodeURIComponent(id) + '/messages?limit=150&before=' + waG.messages[0].id);
+  if (waG.current !== id) return;
+  const box = document.getElementById('wagMsgs');
+  const fromBottom = box.scrollHeight - box.scrollTop;
+  waG.messages = data.messages.concat(waG.messages);
+  waG.hasMore = data.hasMore;
+  renderWaChat(data.group, 'none');
+  const nb = document.getElementById('wagMsgs');
+  nb.scrollTop = nb.scrollHeight - fromBottom;
+}
+
+function renderWaChat(group, scroll) {
+  const g = waG.groups.find((x) => x.id === group.id) || group;
+  let day = '';
+  const rows = waG.messages.map((m) => {
+    const d = waDay(m.ts);
+    const sep = d !== day ? `<div class="wag-day">${escapeHtml(d)}</div>` : '';
+    day = d;
+    const media = m.media ? `<span class="wag-media">${escapeHtml(m.media)}</span>${m.body ? ' ' : ''}` : '';
+    return sep + `<div class="wag-msg"><div class="wag-from" style="color:${waColor(m.sender)}">${escapeHtml(m.sender)}</div>
+      <div class="wag-text">${media}${linkify(escapeHtml(m.body || ''))}</div><div class="wag-at">${waClock(m.ts)}</div></div>`;
+  }).join('');
+  const box = document.getElementById('wagMsgs');
+  const keep = box ? box.scrollTop : 0;
+  document.getElementById('wagChat').innerHTML = `<div class="wag-chat-head"><div class="wag-avi" style="background:${waColor(g.id)}">${escapeHtml(waGroupName(g).charAt(0).toUpperCase())}</div>
+      <div><div class="wag-chat-title">${escapeHtml(waGroupName(g))}</div><div class="wag-chat-sub">${g.participants ? g.participants + ' anggota · ' : ''}${waG.messages.length} pesan dimuat</div></div>
+      <span class="wag-ro">Hanya baca</span></div>
+    <div class="wag-msgs" id="wagMsgs">${waG.hasMore ? '<button class="wa-btn ghost wag-more" type="button" onclick="waLoadOlder()">Muat pesan lebih lama</button>' : ''}${rows}</div>`;
+  const nb = document.getElementById('wagMsgs');
+  if (scroll === 'bottom') nb.scrollTop = nb.scrollHeight;
+  else if (scroll === 'keep') nb.scrollTop = keep;
+}
+
+/* ── Summary Chating (EPIC-008 T-045): summarize a group over a date range ── */
+const waS = { groups: [], current: null, timer: null };
+
+async function waSummaryOpen() {
+  waSummaryClose();
+  const el = document.getElementById('waSummaryPage');
+  el.innerHTML = '<div class="wa-grid"><div class="wa-box"><div class="wa-msg"><span class="wa-spin"></span>Memuat grup…</div></div></div>';
+  try { waS.groups = (await api('GET', '/api/wa/groups')).groups; }
+  catch (e) { el.innerHTML = `<div class="wa-grid"><div class="wa-box"><div class="wa-msg err">Gagal memuat grup: ${escapeHtml(e.message)}</div></div></div>`; return; }
+  if (waPage !== 'summary') return;
+  const today = new Date();
+  const weekAgo = new Date(); weekAgo.setDate(today.getDate() - 6);
+  const opts = waS.groups.map((g) => `<option value="${escapeAttr(g.id)}">${escapeHtml(waGroupName(g))} (${g.messageCount} pesan)</option>`).join('');
+  const agentOpts = AGENTS.map((a) => `<option value="${a.id}"${a.id === 'dave' ? ' selected' : ''}>${escapeHtml(a.name)} — ${escapeHtml(a.role)}</option>`).join('');
+  el.innerHTML = `<div class="wa-grid">
+    <div class="wa-box"><h3>Buat ringkasan percakapan grup</h3>
+      ${waS.groups.length ? `<div class="was-form">
+        <label>Grup<select id="wasGroup" onchange="waSummaryGroupChanged()">${opts}</select></label>
+        <label>Dari<input type="date" id="wasFrom" value="${waIsoDay(weekAgo)}" max="${waIsoDay(today)}"></label>
+        <label>Sampai<input type="date" id="wasTo" value="${waIsoDay(today)}" max="${waIsoDay(today)}"></label>
+        <label>Agent<select id="wasAgent">${agentOpts}</select></label>
+        <button class="wa-btn primary" type="button" id="wasGo" onclick="waCreateSummary()">Buat ringkasan</button>
+      </div><div class="was-hint" id="wasHint"></div>` : '<div class="wa-msg">Belum ada grup di arsip. Grup muncul setelah ada pesan pertama sejak arsip aktif.</div>'}
+    </div>
+    <div class="wa-box hidden" id="wasResultBox"><h3>Hasil</h3><div id="wasResult"></div></div>
+    <div class="wa-box"><h3>Riwayat ringkasan</h3><div class="was-hist" id="wasHist"><div class="wa-msg">—</div></div></div>
+  </div>`;
+  if (waS.groups.length) waSummaryGroupChanged();
+}
+
+function waSummaryClose() { clearTimeout(waS.timer); waS.timer = null; }
+
+function waSummaryGroupChanged() {
+  const g = waS.groups.find((x) => x.id === document.getElementById('wasGroup').value);
+  document.getElementById('wasHint').textContent = g
+    ? 'Data grup ini tersedia sejak ' + waDay(g.firstTs) + '. ' + WA_LIMITS_NOTE
+    : '';
+  waLoadSummaryHistory();
+}
+
+async function waLoadSummaryHistory() {
+  const chatId = document.getElementById('wasGroup').value;
+  let list = [];
+  try { list = (await api('GET', '/api/wa/summaries?chatId=' + encodeURIComponent(chatId))).summaries; } catch (e) { /* keep empty */ }
+  if (waPage !== 'summary' || document.getElementById('wasGroup').value !== chatId) return;
+  const el = document.getElementById('wasHist');
+  if (!list.length) { el.innerHTML = '<div class="wa-msg">Belum ada ringkasan untuk grup ini.</div>'; return; }
+  el.innerHTML = list.map((s) => {
+    const agent = (AGENTS.find((a) => a.id === s.agentId) || { name: s.agentId }).name;
+    const st = s.status === 'done' ? '✓ selesai' : s.status === 'running' ? '⏳ diproses' : '⚠️ gagal';
+    return `<div class="was-h${waS.current === s.id ? ' on' : ''}" onclick="waShowSummary(${s.id})"><b>${escapeHtml(s.from)} → ${escapeHtml(s.to)}</b>
+      <span>${s.messageCount} pesan · ${escapeHtml(agent)} · oleh ${escapeHtml(s.by || '-')}</span><span class="st">${st}</span></div>`;
+  }).join('');
+}
+
+async function waCreateSummary() {
+  const btn = document.getElementById('wasGo');
+  btn.disabled = true;
+  try {
+    const r = await api('POST', '/api/wa/summaries', {
+      chatId: document.getElementById('wasGroup').value,
+      from: document.getElementById('wasFrom').value,
+      to: document.getElementById('wasTo').value,
+      agentId: document.getElementById('wasAgent').value
+    });
+    waShowSummary(r.summary.id);
+    waLoadSummaryHistory();
+  } catch (e) {
+    showToast('⚠️ ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function waShowSummary(id) {
+  waSummaryClose();
+  waS.current = id;
+  let s;
+  try { s = (await api('GET', '/api/wa/summaries/' + id)).summary; } catch (e) { showToast('⚠️ ' + e.message); return; }
+  if (waPage !== 'summary' || waS.current !== id) return;
+  const box = document.getElementById('wasResultBox');
+  box.classList.remove('hidden');
+  const g = waS.groups.find((x) => x.id === s.chatId);
+  const agent = (AGENTS.find((a) => a.id === s.agentId) || { name: s.agentId }).name;
+  const meta = `<div class="was-meta">${escapeHtml(g ? waGroupName(g) : s.chatId)} · ${escapeHtml(s.from)} → ${escapeHtml(s.to)} · ${s.messageCount} pesan · ${escapeHtml(agent)} · oleh ${escapeHtml(s.by || '-')}</div>`;
+  const body = s.status === 'done' ? `<div class="was-result">${formatMsg(s.content)}</div>`
+    : s.status === 'running' ? `<div class="wa-msg"><span class="wa-spin"></span>${escapeHtml(agent)} sedang meringkas ${s.messageCount} pesan…</div>`
+    : `<div class="wa-msg err">Gagal: ${escapeHtml(s.error || 'tidak diketahui')}</div>`;
+  document.getElementById('wasResult').innerHTML = meta + body;
+  document.querySelectorAll('.was-h').forEach((n) => n.classList.remove('on'));
+  if (s.status === 'running') waS.timer = setTimeout(() => waShowSummary(id), 3000);
+  else waLoadSummaryHistory();
+}
+
+/* ── Page registry: real pages replace the "Segera hadir" card ── */
+const WA_IMPL = {
+  connect: { el: 'waConnect', open: waConnectOpen, close: waConnectClose },
+  groups: { el: 'waGroupsPage', open: waGroupsOpen, close: waGroupsClose },
+  summary: { el: 'waSummaryPage', open: waSummaryOpen, close: waSummaryClose }
+};
+function closeWaPages() { for (const p of Object.values(WA_IMPL)) p.close(); }
 
 // A reload on #wa-inbox (etc.) reopens that page.
 function openWaFromHash() {

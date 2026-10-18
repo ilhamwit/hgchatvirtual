@@ -44,6 +44,7 @@ function runServer(env, { timeoutMs = 5000 } = {}) {
       CHAT_DB_PATH: path.join(home, 'test.db'), CHAT_HERMES_URL: NO_GATEWAY,
       // WhatsApp: never the real Hermes session, bridge or install.
       CHAT_HERMES_HOME: home, CHAT_WA_SESSION_DIR: path.join(home, 'wa', 'session'), CHAT_WA_BRIDGE_URL: NO_GATEWAY,
+      CHAT_WA_ARCHIVE: path.join(home, 'wa', 'group_archive.jsonl'), TZ: 'Asia/Jakarta',
       ...env
     }
   });

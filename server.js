@@ -19,6 +19,7 @@ const audit = require('./lib/audit');
 const { createGateway, DEFAULT_URL: DEFAULT_GATEWAY_URL } = require('./lib/gateway');
 const { createApi } = require('./lib/api');
 const { createWhatsApp } = require('./lib/whatsapp');
+const { createWaArchive } = require('./lib/wa-archive');
 
 // Fail fast on bad config. Production (systemd) must provide the Hermes
 // API key; CHAT_DEV=1 is the explicit opt-out for local UI work. See .env.example.
@@ -104,12 +105,16 @@ const whatsapp = createWhatsApp({
   onEvent: (event, username, detail) => audit.record(db, { event, username, ip: 'web', detail })
 });
 
+const gateway = createGateway({ url: GATEWAY, key: HERMES_API_KEY });
+
 const api = createApi({
   db,
-  gateway: createGateway({ url: GATEWAY, key: HERMES_API_KEY }),
+  gateway,
   agents: AGENTS,
   mediaDir: MEDIA_DIR,
-  whatsapp
+  whatsapp,
+  // Group reading + summaries from Hermes' WhatsApp group archive (read only).
+  waArchive: createWaArchive({ db, gateway, agents: AGENTS })
 });
 
 // Keep only a basename, and only characters that are safe in a shell argument
