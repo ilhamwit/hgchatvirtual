@@ -75,6 +75,7 @@ terpisah per orang. Pembatasan per agent bisa ditambah lewat role nanti.
 - 2026-10-18 QA: user login, chat, dan Keluar dari browser di agents.herrygunawan.com — berhasil — done
 - 2026-10-18 Hotfix (laporan user setelah rilis EPIC-002/007): login berhasil di server (sesi tercatat 22:22:45) tapi browser kembali ke /login saat dibuka lewat http:// ("Not Secure"). Penyebab: situs bisa diakses via http dan https; cookie sesi `Secure` dari kunjungan https tidak boleh ditimpa dari halaman http dan tidak dikirim lewat http. Perbaikan: pengunjung lewat Cloudflare dengan skema http (CF-Visitor / X-Forwarded-Proto, hanya dipercaya dari loopback) diarahkan 308 ke https (path+query utuh, Host divalidasi); flag Secure kini mengikuti CF-Visitor. Sekalian: logo di halaman login rusak karena `/assets/hg-logo.png` butuh login → kini satu-satunya aset publik (foto agent tetap privat). 6 test baru (`test/https.test.js`), total 43 PASS — done
 - 2026-10-18 Hotfix di `main` (6ebbe10) tapi BELUM aktif: service masih PID 206012 (22:19). User berhasil login dengan membuka https langsung. Perlu restart agar http→https dan logo login aktif — pending restart
+- 2026-10-18 Hotfix aktif: restart 22:30:41 (PID 221120). Dicek publik: http://…/login dan /?x=1 → 308 ke https (path+query utuh); https /login 200; logo 200 image/png tanpa login; foto agent tetap 302; cookie Secure via https; akses lokal 127.0.0.1 tanpa redirect — done
 
 ## Dependencies
 
