@@ -20,10 +20,10 @@ Semua seed di bawah sudah dipromosikan menjadi task di epic masing-masing.
 
 - [x] **P0** (Backend) Akun per orang, scrypt, sesi revocable, rate limit — T-006 … T-009
 - [x] **P0** (Backend) CLI admin user; hapus PIN, Basic auth bersama, CORS `*` — T-010, T-011
-- [ ] **P0** (Backend) Tabel percakapan/pesan + API `/api/...` — T-012, T-013
-- [ ] **P0** (Backend) Sesi OpenClaw per percakapan + atribusi pengirim — T-014, T-015
-- [ ] **P0** (Backend) Tutup proxy `/v1/*` — T-016
-- [ ] **P0** (Frontend) UI pakai API server + "Chat baru" + impor localStorage — T-017, T-018
+- [x] **P0** (Backend) Tabel percakapan/pesan + API `/api/...` — T-012, T-013
+- [x] **P0** (Backend) Sesi agent (Hermes) per percakapan + atribusi pengirim — T-014, T-015
+- [x] **P0** (Backend) Tutup proxy `/v1/*` — T-016
+- [x] **P0** (Frontend) UI pakai API server + "Chat baru" + impor localStorage — T-017, T-018
 
 ## Phase 2 · Harian _(EPIC-003, EPIC-004, EPIC-005)_
 

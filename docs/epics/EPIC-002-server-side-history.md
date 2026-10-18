@@ -1,6 +1,6 @@
 # EPIC-002: Riwayat Percakapan di Server + API Chat
 
-status: ready-for-qa
+status: done
 environment: dev
 phase: 1
 priority: P0
@@ -74,6 +74,7 @@ token operator (akses setara admin gateway, termasuk `x-openclaw-model`).
 - 2026-10-18 Test: 13 test baru (`test/conversations.test.js`, gateway palsu) — total 35 PASS; helper test default ke gateway yang tidak ada (127.0.0.1:9) agar test tak pernah menyentuh OpenClaw asli; `test.sh` cek `/api/agents`, `/api/conversations`, `/v1/models` → 404. Gate PASS, security 0 warning. Round-trip ke gateway asli lewat dev :8651: Dave membalas "OK" dalam 1,3 dtk, sesi `hgchat:1f03c91e…` tercipta. Frontend belum diuji di browser (Claude in Chrome tidak terhubung); handler onclick dicek statis — done
 - 2026-10-18 Status → ready-for-qa. Rilis: merge `epic-002` → `main`, restart (migrasi 2 jalan otomatis, tanpa langkah akun). QA: dua user chat dengan agent yang sama, cek riwayat di perangkat lain, Chat baru, Coba lagi, Stop, dan impor riwayat lama browser — ready-for-qa
 - 2026-10-18 Merge `epic-002` → `main` (2f2ee5a); migrasi v1→v2 diuji pada salinan DB production (3 user utuh). Verifikasi setelah laporan QA: service BELUM di-restart (masih PID 154374 dari 21:41, banner lama, DB masih v1, tanpa tabel conversations). Karena server lama menyajikan `public/` dari disk, frontend baru aktif melawan backend lama → muat riwayat/chat gagal sampai restart. Menunggu restart sungguhan; usulan model rilis terpisah (task_3703f080) — ready-for-qa
+- 2026-10-18 Rilis aktif: restart 22:19 (PID 206012), migrasi v2 berhasil di DB production. QA browser oleh user (via https): 6 percakapan ilham di kelima agent, 0 error, Chat baru (dua percakapan Dylan), impor riwayat lama browser (Jaden, import_key terisi). Pemisahan antar user di browser tidak diuji manual (hanya ilham); dijamin test otomatis "two users on the same agent get separate … sessions" dan "another user's conversation is a 404" — done
 
 ## Dependencies
 

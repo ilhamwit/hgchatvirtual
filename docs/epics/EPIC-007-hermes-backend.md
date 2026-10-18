@@ -1,6 +1,6 @@
 # EPIC-007: Pindah Backend Agent ke Hermes
 
-status: ready-for-qa
+status: done
 environment: dev
 phase: 1
 priority: P0
@@ -44,7 +44,7 @@ percakapan.
 
 ### Rilis
 
-- [ ] **T-040** Merge ke `main`, restart `chat-center` (bersamaan dengan rilis EPIC-002 yang belum aktif), uji chat dari browser ke kelima agent.
+- [x] **T-040** Merge ke `main`, restart `chat-center` (bersamaan dengan rilis EPIC-002 yang belum aktif), uji chat dari browser ke kelima agent.
 
 ## Acceptance Criteria
 
@@ -71,6 +71,7 @@ percakapan.
 - 2026-10-18 T-037/T-038/T-039: env & test & docs diperbarui; 37 test PASS (2 baru: finish_reason cancelled/error/401, Hermes tidak terjangkau). Catatan: default test memakai port 9 yang ditolak `fetch` ("bad port") — jaminan tidak pernah terhubung ke mana pun — done
 - 2026-10-18 Uji end-to-end lewat dev :8651 (`--gateway`, kunci dari env production): kelima agent menyebut namanya sendiri (dave 1,8 dtk · jaden 1,4 · joel 2,9 · dylan 4,0 · nana 3,4); Dave: "Ingat kata: mangga" → giliran berikutnya "mangga"; "Siapa saya?" → "Hermes Check (@hermescheck)". Data dev dihapus — done
 - 2026-10-18 Status → ready-for-qa (tersisa T-040: restart chat-center + uji browser) — ready-for-qa
+- 2026-10-18 T-040: restart 22:19 (PID 206012, banner "Hermes http://127.0.0.1:8642"). User chat dari browser ke kelima agent; semua dibalas Hermes, 0 error; sesi `hgchat-<id>` tercatat di log agent kelima profil — done
 
 ## Dependencies
 
