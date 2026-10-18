@@ -36,7 +36,7 @@ test('indexing is incremental, waits for complete lines, skips junk, survives ro
   const dir = tempDir();
   const file = path.join(dir, 'archive.jsonl');
   const db = openDb(':memory:');
-  const wa = createWaArchive({ db, gateway: null, agents: ['dave'], archivePath: file, bridgeUrl: 'http://127.0.0.1:9' });
+  const wa = createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db, gateway: null, agents: ['dave'], archivePath: file, bridgeUrl: 'http://127.0.0.1:9' });
   assert.strictEqual(wa.sync(), 0, 'no file yet');
   const a = line({ chatId: G1, ts: at(2026, 10, 18, 9), sender: 'Ana', body: 'pagi' });
   const b = line({ chatId: G1, ts: at(2026, 10, 18, 10), sender: 'Budi', body: 'halo' });
@@ -62,15 +62,18 @@ test('groups get names from the bridge (cached), newest first, with last message
     line({ chatId: G2, ts: at(2026, 10, 18, 11), sender: 'Cici', body: '', hasMedia: true, mediaType: 'image' }));
   const bridge = await fakeBridge({ [G2]: ['Tim Inti', 5] });
   const db = openDb(':memory:');
-  const wa = createWaArchive({ db, gateway: null, agents: ['dave'], archivePath: file, bridgeUrl: bridge.url });
-  const g = await wa.groups();
-  assert.deepStrictEqual(g.map((x) => [x.id, x.name, x.participants, x.messageCount]), [[G2, 'Tim Inti', 5, 1], [G1, null, null, 1]]);
-  assert.deepStrictEqual(g[0].last, { sender: 'Cici', text: '[foto]' });
-  const before = bridge.calls.length;
-  await wa.groups();
-  assert.strictEqual(bridge.calls.length - before, 1, 'named group cached; the unnamed one is asked again');
-  bridge.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  const wa = createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db, gateway: null, agents: ['dave'], archivePath: file, bridgeUrl: bridge.url });
+  try {
+    const g = await wa.groups();
+    assert.deepStrictEqual(g.map((x) => [x.id, x.name, x.participants, x.messageCount]), [[G2, 'Tim Inti', 5, 1], [G1, null, null, 1]]);
+    assert.deepStrictEqual(g[0].last, { sender: 'Cici', text: '[foto]', fromMe: false });
+    const before = bridge.calls.length;
+    await wa.groups();
+    assert.strictEqual(bridge.calls.length - before, 1, 'named group cached; the unnamed one is asked again');
+  } finally {
+    bridge.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('messages page newest-first with hasMore, shown oldest-first', () => {
@@ -79,7 +82,7 @@ test('messages page newest-first with hasMore, shown oldest-first', () => {
   let all = '';
   for (let i = 0; i < 250; i++) all += line({ chatId: G1, ts: at(2026, 10, 1) + i * 60000, sender: 'Ana', body: 'pesan ' + i });
   fs.writeFileSync(file, all);
-  const wa = createWaArchive({ db: openDb(':memory:'), gateway: null, agents: ['dave'], archivePath: file, bridgeUrl: 'http://127.0.0.1:9' });
+  const wa = createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db: openDb(':memory:'), gateway: null, agents: ['dave'], archivePath: file, bridgeUrl: 'http://127.0.0.1:9' });
   const p1 = wa.messages(G1, { limit: 100 });
   assert.strictEqual(p1.messages.length, 100);
   assert.ok(p1.hasMore);
@@ -103,7 +106,7 @@ test('long ranges are summarized in parts, then combined; tools and sending are 
   const gateway = { ask: async (a) => { calls.push(a); return a.conversationId.endsWith('-0') ? '## Ringkasan\nFinal' : 'catatan ' + calls.length; } };
   const db = openDb(':memory:');
   db.prepare("INSERT INTO users (id, username, display_name, password_hash, created_at) VALUES (1, 'ilham', 'Ilham', 'x', 0)").run();
-  const wa = createWaArchive({ db, gateway, agents: ['dave', 'joel'], archivePath: file, bridgeUrl: 'http://127.0.0.1:9', chunkChars: 400 });
+  const wa = createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db, gateway, agents: ['dave', 'joel'], archivePath: file, bridgeUrl: 'http://127.0.0.1:9', chunkChars: 400 });
   const s = wa.createSummary({ id: 1 }, { chatId: G1, from: '2026-10-18', to: '2026-10-18', agentId: 'joel' });
   assert.strictEqual(s.status, 'running');
   assert.strictEqual(s.messageCount, 30);
@@ -125,7 +128,7 @@ test('long ranges are summarized in parts, then combined; tools and sending are 
 test('a summary cut off by a restart is marked failed on the next start', () => {
   const db = openDb(':memory:');
   db.prepare("INSERT INTO wa_summaries (chat_id, from_ts, to_ts, agent_id, status, created_at) VALUES (?, 0, 1, 'dave', 'running', 0)").run(G1);
-  createWaArchive({ db, gateway: null, agents: ['dave'], archivePath: '/nonexistent', bridgeUrl: 'http://127.0.0.1:9' });
+  createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db, gateway: null, agents: ['dave'], archivePath: '/nonexistent', bridgeUrl: 'http://127.0.0.1:9' });
   const r = db.prepare('SELECT status, error FROM wa_summaries').get();
   assert.strictEqual(r.status, 'error');
   assert.match(r.error, /restart/);
@@ -190,4 +193,62 @@ test('API: groups and read-only messages for any logged-in user; summaries via H
     await gw.close();
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+// ── bot replies (from Hermes' state.db) and "@<lid>" mentions ──
+
+function fakeHermes(dir, rows) {
+  const { DatabaseSync } = require('node:sqlite');
+  const file = path.join(dir, 'state.db');
+  const db = new DatabaseSync(file);
+  db.exec(`CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, source TEXT, chat_type TEXT, chat_id TEXT);
+           CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT, finish_reason TEXT, timestamp REAL);`);
+  db.prepare("INSERT OR IGNORE INTO sessions VALUES ('sg', 'whatsapp', 'group', ?), ('sd', 'whatsapp', 'dm', '628111@s.whatsapp.net')").run(G1);
+  for (const r of rows) db.prepare('INSERT INTO messages (session_id, role, content, finish_reason, timestamp) VALUES (?, ?, ?, ?, ?)').run(...r);
+  db.close();
+  return file;
+}
+
+function fakeSession(dir) {
+  const s = path.join(dir, 'session');
+  fs.mkdirSync(s, { recursive: true });
+  fs.writeFileSync(path.join(s, 'creds.json'), JSON.stringify({ me: { id: '628999000111:8@s.whatsapp.net', name: 'Rederp', lid: '110935482048547:8@lid' } }));
+  fs.writeFileSync(path.join(s, 'lid-mapping-20714795057374_reverse.json'), JSON.stringify('628122000'));
+  return s;
+}
+
+test("the bot's group replies come from Hermes' sessions, incrementally, and only final ones", () => {
+  const dir = tempDir();
+  const t = at(2026, 10, 18, 9) / 1000;
+  const stateDb = fakeHermes(dir, [
+    ['sg', 'user', 'tanya', null, t],
+    ['sg', 'assistant', 'sebentar, saya cek', 'tool_calls', t + 1],
+    ['sg', 'assistant', 'Jawaban bot', 'stop', t + 2],
+    ['sg', 'assistant', '   ', 'stop', t + 3],
+    ['sd', 'assistant', 'balasan DM', 'stop', t + 4]
+  ]);
+  const archivePath = path.join(dir, 'archive.jsonl');
+  fs.writeFileSync(archivePath, line({ chatId: G1, ts: at(2026, 10, 18, 8, 59), sender: 'Ana', body: 'halo bot' }));
+  const db = openDb(':memory:');
+  const wa = createWaArchive({ db, gateway: null, agents: ['dave'], archivePath, bridgeUrl: 'http://127.0.0.1:9', hermesStateDb: stateDb, sessionDir: fakeSession(dir) });
+  assert.strictEqual(wa.sync(), 2, 'one member message + one final bot reply');
+  const page = wa.messages(G1).messages;
+  assert.deepStrictEqual(page.map((m) => [m.sender, m.body, m.fromMe]), [['Ana', 'halo bot', false], ['Rederp', 'Jawaban bot', true]]);
+  fakeHermes(dir, [['sg', 'assistant', 'Balasan kedua', 'stop', t + 60]]);
+  assert.strictEqual(wa.sync(), 1);
+  assert.strictEqual(wa.sync(), 0);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('"@<lid>" mentions show names: the bot, mapped members, unknown left as is', () => {
+  const dir = tempDir();
+  const archivePath = path.join(dir, 'archive.jsonl');
+  fs.writeFileSync(archivePath,
+    line({ chatId: G1, ts: at(2026, 10, 18, 9), sender: 'Cahyo Febrianto', senderNumber: '628122000', body: 'hai semua' }) +
+    line({ chatId: G1, ts: at(2026, 10, 18, 10), sender: 'Ana', body: '@110935482048547 tolong cek, cc @20714795057374 dan @99999999999' }));
+  const db = openDb(':memory:');
+  const wa = createWaArchive({ db, gateway: null, agents: ['dave'], archivePath, bridgeUrl: 'http://127.0.0.1:9', hermesStateDb: '/nonexistent', sessionDir: fakeSession(dir) });
+  const page = wa.messages(G1).messages;
+  assert.strictEqual(page[1].body, '@Rederp tolong cek, cc @Cahyo Febrianto dan @99999999999');
+  fs.rmSync(dir, { recursive: true, force: true });
 });

@@ -167,8 +167,14 @@ membaca semua grup tempat bot berada.
   agent (default Dave) → diringkas oleh agent Hermes di latar belakang; rentang
   panjang dipecah per bagian lalu digabung. Hasil tersimpan di `wa_summaries`.
 
-Keterbatasan: riwayat hanya sejak arsip aktif; balasan bot sendiri tidak ikut
-diarsip oleh bridge; media hanya label; grup muncul setelah ada pesan pertama.
+Balasan bot diambil (hanya-baca) dari sesi grup di `~/.hermes/state.db` karena
+bridge tidak mengarsipkannya; tampil di kanan sebagai "<nama bot> · bot". Mention
+`@<LID>` diganti nama: bot dari `creds.json`, anggota lewat file
+`lid-mapping-*_reverse.json` di sesi WhatsApp → nomor → nama pengirim.
+
+Keterbatasan: riwayat hanya sejak arsip aktif; kiriman cron Hermes (mis.
+`wa-group-summary`) tidak tampil; media hanya label; grup muncul setelah ada
+pesan pertama.
 
 ### Health, log, audit
 

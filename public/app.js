@@ -828,7 +828,7 @@ function waGroupName(g) { return g.name || ('Grup ' + String(g.id).replace(/@.*/
 function waDay(ts) { return new Date(ts).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
 function waClock(ts) { return new Date(ts).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }); }
 function waIsoDay(d) { const p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
-const WA_LIMITS_NOTE = 'Diambil dari arsip grup bot Hermes: riwayat ada sejak arsip aktif, balasan bot sendiri tidak tercatat, media hanya berupa label.';
+const WA_LIMITS_NOTE = 'Dari arsip grup bot Hermes (pesan anggota) dan sesi Hermes (balasan bot): riwayat ada sejak arsip aktif, media hanya berupa label.';
 
 /* ── Pilih Group (EPIC-008 T-043): groups the bot is in, read-only chat ── */
 const waG = { groups: [], current: null, messages: [], hasMore: false, timer: null };
@@ -884,7 +884,21 @@ function waOpenGroup(id) {
 }
 
 // fresh=true: first page of a newly opened group. false: periodic refresh.
-async function waLoadMessages(fresh) {
+// Refresh button: pull new messages and the group list now.
+async function waRefreshNow() {
+  const btn = document.getElementById('wagRefresh');
+  if (btn) { btn.disabled = true; btn.textContent = 'Memuat…'; }
+  try {
+    await waGroupsRefresh(true);
+    if (waG.current) await waLoadMessages(false, true);
+  } finally {
+    const b = document.getElementById('wagRefresh');
+    if (b) { b.disabled = false; b.textContent = '↻ Refresh'; }
+  }
+}
+
+// force: re-draw even when nothing new arrived (so "Diperbarui" moves on).
+async function waLoadMessages(fresh, force) {
   const id = waG.current;
   let data;
   try { data = await api('GET', '/api/wa/groups/' + encodeURIComponent(id) + '/messages?limit=150'); }
@@ -892,7 +906,12 @@ async function waLoadMessages(fresh) {
   if (waG.current !== id || waPage !== 'groups') return;
   const newest = waG.messages.length ? waG.messages[waG.messages.length - 1].id : 0;
   const latest = data.messages.length ? data.messages[data.messages.length - 1].id : 0;
-  if (!fresh && latest === newest) return;
+  waG.updatedAt = Date.now();
+  if (!fresh && !force && latest === newest) {
+    const u = document.getElementById('wagUpdated');
+    if (u) u.textContent = 'Diperbarui ' + waClock(waG.updatedAt);
+    return;
+  }
   const box = document.getElementById('wagMsgs');
   const atBottom = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 40;
   waG.messages = data.messages;
@@ -922,14 +941,18 @@ function renderWaChat(group, scroll) {
     const sep = d !== day ? `<div class="wag-day">${escapeHtml(d)}</div>` : '';
     day = d;
     const media = m.media ? `<span class="wag-media">${escapeHtml(m.media)}</span>${m.body ? ' ' : ''}` : '';
-    return sep + `<div class="wag-msg"><div class="wag-from" style="color:${waColor(m.sender)}">${escapeHtml(m.sender)}</div>
+    // The bot's own replies sit on the right, like your own messages in WhatsApp.
+    const who = m.fromMe ? `${escapeHtml(m.sender)} · bot` : escapeHtml(m.sender);
+    return sep + `<div class="wag-msg${m.fromMe ? ' me' : ''}"><div class="wag-from" style="color:${m.fromMe ? '#15803D' : waColor(m.sender)}">${who}</div>
       <div class="wag-text">${media}${linkify(escapeHtml(m.body || ''))}</div><div class="wag-at">${waClock(m.ts)}</div></div>`;
   }).join('');
   const box = document.getElementById('wagMsgs');
   const keep = box ? box.scrollTop : 0;
   document.getElementById('wagChat').innerHTML = `<div class="wag-chat-head"><div class="wag-avi" style="background:${waColor(g.id)}">${escapeHtml(waGroupName(g).charAt(0).toUpperCase())}</div>
       <div><div class="wag-chat-title">${escapeHtml(waGroupName(g))}</div><div class="wag-chat-sub">${g.participants ? g.participants + ' anggota · ' : ''}${waG.messages.length} pesan dimuat</div></div>
-      <span class="wag-ro">Hanya baca</span></div>
+      <span class="wag-ro">Hanya baca</span>
+      <span class="wag-upd" id="wagUpdated">${waG.updatedAt ? 'Diperbarui ' + waClock(waG.updatedAt) : ''}</span>
+      <button class="wa-btn ghost wag-refresh" type="button" id="wagRefresh" onclick="waRefreshNow()" title="Ambil pesan baru">↻ Refresh</button></div>
     <div class="wag-msgs" id="wagMsgs">${waG.hasMore ? '<button class="wa-btn ghost wag-more" type="button" onclick="waLoadOlder()">Muat pesan lebih lama</button>' : ''}${rows}</div>`;
   const nb = document.getElementById('wagMsgs');
   if (scroll === 'bottom') nb.scrollTop = nb.scrollHeight;

@@ -33,7 +33,11 @@ it stops being true. Durable decisions also go in the owning epic's Automation L
   into `wa_messages` (migration 4; offset + inode + head hash, so rotation is
   safe). Group policy in Hermes is `open` + `require_mention: true`. A Hermes
   cron `wa-group-summary` (every 6 h) already posts digests to a group —
-  separate from the web summaries.
+  separate from the web summaries. The bot's own group replies are not in the
+  archive (bridge skips fromMe in groups); they are read from Hermes'
+  `state.db` (sessions source=whatsapp, chat_type=group, assistant +
+  finish_reason=stop). Mentions are "@<LID>"; resolve via creds.json me.lid
+  (bot) and `lid-mapping-<lid>_reverse.json` (→ phone → sender_name).
 - OpenClaw is retired: `openclaw-gateway` (user service) was stopped and disabled
   on 2026-10-18 because it polled the same Telegram bots as Hermes.
 - The browser never reaches Hermes: `lib/api.js` (/api/*) stores messages in
