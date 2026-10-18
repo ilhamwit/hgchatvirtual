@@ -677,7 +677,7 @@ const WA_PAGES = {
   summary: { title: 'Summary Chat' },
   connect: { title: 'Koneksikan WA' },
   // Not WhatsApp, but the same full-width page slot (EPIC-009).
-  schedule: { title: 'Jadwal agent', crumb: 'Schedule', hash: 'schedule' }
+  schedule: { title: 'Jadwal & Meeting', crumb: 'Schedule', hash: 'schedule' }
 };
 const pageHash = (key) => '#' + (WA_PAGES[key].hash || 'wa-' + key);
 let waPage = null;
@@ -1112,152 +1112,357 @@ function waCloseSummary() {
   document.querySelectorAll('.was-h').forEach((n) => n.classList.remove('on'));
 }
 
-/* ── Schedule (EPIC-009 T-046) ─────────────
-   Jobs Hermes runs on a timer (`hermes cron`), from every agent profile.
-   Read only: what runs, when, where it is sent, and how recent runs went. */
-const sched = { jobs: [], details: {} };
+/* ── Schedule: Jadwal & Meeting (EPIC-009) ─────────────
+   A month calendar on the left, a panel on the right: upcoming events, the
+   event form, or one event (agenda by Aurix → checked → "Kirim ke grup" →
+   reminders). Dates and times are WIB, as the server stores them. */
+const sch = { y: 0, m: 0, events: [], upcoming: [], groups: null, options: null, panel: 'upcoming', cur: null, editing: null, agendaEdit: false, confirm: null, poll: null };
+const SCH_DAYS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+const SCH_MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+const SCH_DURATIONS = [[15, '15 menit'], [30, '30 menit'], [45, '45 menit'], [60, '1 jam'], [90, '1,5 jam'], [120, '2 jam'], [180, '3 jam'], [240, '4 jam'], [480, 'Seharian (8 jam)']];
+const SCH_STATUS = { draft: ['warn', 'Draf — belum dikirim'], sent: ['ok', 'Terkirim ke grup'], cancelled: ['bad', 'Dibatalkan'] };
+const schPad = (n) => String(n).padStart(2, '0');
+const schToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
+const schIso = (y, m, d) => { const t = new Date(Date.UTC(y, m - 1, d)); return t.getUTCFullYear() + '-' + schPad(t.getUTCMonth() + 1) + '-' + schPad(t.getUTCDate()); };
+const schClock = (t) => String(t).replace(':', '.');
+const schWibStamp = (ms) => new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(ms);
 
-function schedClose() { sched.details = {}; }
-
-function schedAgent(profile) {
-  if (profile === 'default') return 'Hermes utama';
-  const a = AGENTS.find((x) => x.id === profile);
-  return a ? a.name : profile.charAt(0).toUpperCase() + profile.slice(1);
+// WhatsApp formatting, as the group will see it: *tebal*, _miring_, ~coret~.
+function schWa(text) {
+  return escapeHtml(String(text || ''))
+    .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?:;]|$)/gm, '$1<b>$2</b>')
+    .replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?:;]|$)/gm, '$1<i>$2</i>')
+    .replace(/(^|[\s(])~([^~\n]+)~(?=[\s).,!?:;]|$)/gm, '$1<s>$2</s>');
 }
 
-// "Hari ini 03.23", "Besok 09.00", "Kemarin 21.23", else "17 Okt 08.00".
-function schedWhen(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d)) return String(iso);
-  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const diff = Math.round((day(d) - day(new Date())) / 86400000);
-  const label = { 0: 'Hari ini', 1: 'Besok', [-1]: 'Kemarin' }[diff]
-    || d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
-  return label + ' ' + waClock(d);
-}
+function schStopPoll() { clearTimeout(sch.poll); sch.poll = null; }
+function schClose() { schStopPoll(); sch.cur = null; sch.confirm = null; }
 
-// "dalam 2 jam" / "3 jam lalu".
-function schedRel(iso) {
-  const ms = new Date(iso).getTime() - Date.now();
-  if (!iso || isNaN(ms)) return '';
-  const a = Math.abs(ms) / 60000;
-  const n = a < 1 ? 'kurang dari 1 menit' : a < 60 ? Math.round(a) + ' menit' : a < 2880 ? Math.round(a / 60) + ' jam' : Math.round(a / 1440) + ' hari';
-  return ms >= 0 ? 'dalam ' + n : n + ' lalu';
-}
-
-function schedDuration(a, b) {
-  const s = Math.round((new Date(b) - new Date(a)) / 1000);
-  if (!a || !b || isNaN(s) || s < 0) return '—';
-  return s < 60 ? s + ' dtk' : Math.floor(s / 60) + ' mnt ' + (s % 60) + ' dtk';
-}
-
-const SCHED_STATUS = { active: ['ok', 'Aktif'], paused: ['warn', 'Dijeda'], error: ['bad', 'Gagal'] };
-const SCHED_RUN = {
-  ok: ['ok', 'Berhasil'], completed: ['ok', 'Berhasil'], success: ['ok', 'Berhasil'],
-  error: ['bad', 'Gagal'], failed: ['bad', 'Gagal'], running: ['warn', 'Berjalan'], claimed: ['warn', 'Mulai']
-};
-function schedRunPill(status) {
-  const [cls, label] = SCHED_RUN[status] || ['warn', status || '—'];
-  return `<span class="wa-pill ${cls}">${escapeHtml(label)}</span>`;
-}
-
-async function schedOpen() {
+async function schOpen() {
+  schStopPoll();
+  const [y, m] = schToday().split('-').map(Number);
+  if (!sch.y) { sch.y = y; sch.m = m; }
+  sch.panel = 'upcoming'; sch.cur = null; sch.confirm = null;
   const el = document.getElementById('schedulePage');
-  el.innerHTML = '<div class="wa-grid"><div class="wa-box"><div class="wa-msg"><span class="wa-spin"></span>Memuat jadwal…</div></div></div>';
-  try { sched.jobs = (await api('GET', '/api/schedule/jobs')).jobs; }
-  catch (e) {
-    if (waPage === 'schedule') el.innerHTML = `<div class="wa-grid"><div class="wa-box"><div class="wa-msg err">Gagal memuat jadwal: ${escapeHtml(e.message)}</div></div></div>`;
+  el.innerHTML = `<div class="sc-cal"><div class="sc-cal-head">
+        <button class="sc-nav" type="button" onclick="schMonth(-1)" aria-label="Bulan sebelumnya">‹</button>
+        <div class="sc-month" id="scMonth"></div>
+        <button class="sc-nav" type="button" onclick="schMonth(1)" aria-label="Bulan berikutnya">›</button>
+        <button class="wa-btn ghost sc-today" type="button" onclick="schMonth(0)">Hari ini</button>
+        <button class="wa-btn primary sc-new" type="button" onclick="schNew()">+ Buat acara</button>
+      </div>
+      <div class="sc-grid-head">${SCH_DAYS.map((d) => `<div>${d}</div>`).join('')}</div>
+      <div class="sc-grid" id="scGrid"></div>
+    </div>
+    <div class="sc-panel" id="scPanel"><div class="wa-msg"><span class="wa-spin"></span>Memuat jadwal…</div></div>`;
+  try {
+    const [opts] = await Promise.all([api('GET', '/api/events/options'), schLoad()]);
+    sch.options = opts;
+  } catch (e) {
+    if (waPage === 'schedule') document.getElementById('scPanel').innerHTML = `<div class="wa-msg err">Gagal memuat jadwal: ${escapeHtml(e.message)}</div>`;
     return;
   }
   if (waPage !== 'schedule') return;
-  schedRender();
+  schRenderPanel();
+  // Groups come from the WhatsApp archive (and may look names up): not awaited.
+  api('GET', '/api/wa/groups').then((r) => { sch.groups = r.groups; if (sch.panel === 'form') schRenderPanel(); }).catch(() => { sch.groups = []; });
 }
 
-function schedRender() {
-  const el = document.getElementById('schedulePage');
-  const n = sched.jobs.length;
-  const head = `<div class="wa-box sch-head">
-      <div><h3>Jadwal agent</h3>
-        <div class="wa-sub">${n ? n + ' jadwal' : 'Belum ada jadwal'} · dibaca dari cron Hermes (hanya-baca)</div></div>
-      <button class="wa-btn ghost" type="button" onclick="schedOpen()">Muat ulang</button>
-    </div>`;
-  const empty = `<div class="wa-box"><div class="wa-msg">Belum ada pekerjaan terjadwal di Hermes.
-      Jadwal yang dibuat dengan <code>hermes cron create</code> akan muncul di sini.</div></div>`;
-  el.innerHTML = `<div class="wa-grid">${head}${n ? sched.jobs.map(schedCard).join('') : empty}</div>`;
+async function schLoad() {
+  const from = schIso(sch.y, sch.m, 1);
+  const to = schIso(sch.y, sch.m + 1, 1);
+  const [month, up] = await Promise.all([api('GET', `/api/events?from=${from}&to=${to}`), api('GET', '/api/events?upcoming=1')]);
+  sch.events = month.events;
+  sch.upcoming = up.events;
+  if (waPage === 'schedule') schRenderCal();
 }
 
-function schedCard(j) {
-  const [cls, label] = SCHED_STATUS[j.status] || ['warn', j.status];
-  const next = j.status === 'paused'
-    ? (j.pausedReason ? 'Dijeda: ' + escapeHtml(j.pausedReason) : 'Dijeda')
-    : j.nextRunAt ? `${escapeHtml(schedWhen(j.nextRunAt))} <span class="sch-rel">${escapeHtml(schedRel(j.nextRunAt))}</span>` : '—';
-  const last = j.lastRunAt
-    ? `${escapeHtml(schedWhen(j.lastRunAt))} ${schedRunPill(j.lastStatus)}`
-    : 'Belum pernah';
-  const runs = j.runsLimit ? `${j.runsCompleted} dari ${j.runsLimit}×` : `${j.runsCompleted}×`;
-  const err = j.lastError
-    ? `<div class="sch-err"><b>Error terakhir${j.failureStreak > 1 ? ` (${j.failureStreak}× berturut-turut)` : ''}:</b> ${escapeHtml(String(j.lastError).slice(0, 400))}</div>` : '';
-  return `<div class="wa-box sch-job" data-profile="${escapeAttr(j.profile)}" data-id="${escapeAttr(j.id)}">
-      <div class="sch-top">
-        <div class="sch-name">${escapeHtml(j.name)}</div>
-        <span class="sch-tag">${escapeHtml(schedAgent(j.profile))}</span>
-        <span class="wa-pill ${cls}">${escapeHtml(label)}</span>
-      </div>
-      <div class="sch-when"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        ${escapeHtml(j.schedule)}${j.scheduleRaw && j.scheduleRaw !== j.schedule ? ` <span class="sch-raw">${escapeHtml(j.scheduleRaw)}</span>` : ''}</div>
-      <dl class="sch-facts">
-        <div><dt>Berikutnya</dt><dd>${next}</dd></div>
-        <div><dt>Terakhir</dt><dd>${last}</dd></div>
-        <div><dt>Kirim ke</dt><dd>${j.deliver ? escapeHtml(j.deliver.label) : 'Tidak dikirim'}</dd></div>
-        <div><dt>Sudah jalan</dt><dd>${escapeHtml(runs)}</dd></div>
-      </dl>
-      ${err}
-      <div class="sch-actions"><button class="wa-btn ghost" type="button" onclick="schedToggle(this)">Lihat detail</button></div>
-      <div class="sch-detail hidden"></div>
-    </div>`;
+function schMonth(step) {
+  if (step === 0) { const [y, m] = schToday().split('-').map(Number); sch.y = y; sch.m = m; }
+  else { const t = new Date(Date.UTC(sch.y, sch.m - 1 + step, 1)); sch.y = t.getUTCFullYear(); sch.m = t.getUTCMonth() + 1; }
+  schRenderCal();
+  schLoad().catch((e) => showToast('Gagal memuat bulan: ' + e.message));
 }
 
-async function schedToggle(btn) {
-  const card = btn.closest('.sch-job');
-  const box = card.querySelector('.sch-detail');
-  const opening = box.classList.contains('hidden');
-  box.classList.toggle('hidden', !opening);
-  btn.textContent = opening ? 'Tutup detail' : 'Lihat detail';
-  if (!opening) return;
-  const key = card.dataset.profile + '/' + card.dataset.id;
-  box.innerHTML = '<div class="wa-msg"><span class="wa-spin"></span>Memuat riwayat…</div>';
-  try {
-    sched.details[key] = await api('GET', '/api/schedule/jobs/' + encodeURIComponent(card.dataset.profile) + '/' + encodeURIComponent(card.dataset.id));
-  } catch (e) {
-    box.innerHTML = `<div class="wa-msg err">Gagal memuat detail: ${escapeHtml(e.message)}</div>`;
-    return;
+function schRenderCal() {
+  document.getElementById('scMonth').textContent = SCH_MONTHS[sch.m - 1] + ' ' + sch.y;
+  const first = new Date(Date.UTC(sch.y, sch.m - 1, 1));
+  const lead = (first.getUTCDay() + 6) % 7;                        // Monday first
+  const days = new Date(Date.UTC(sch.y, sch.m, 0)).getUTCDate();
+  const cells = Math.ceil((lead + days) / 7) * 7;
+  const today = schToday();
+  const byDay = {};
+  for (const e of sch.events) (byDay[e.date] = byDay[e.date] || []).push(e);
+  let html = '';
+  for (let i = 0; i < cells; i++) {
+    const iso = schIso(sch.y, sch.m, i - lead + 1);
+    const inMonth = i >= lead && i < lead + days;
+    const evs = byDay[iso] || [];
+    const chips = evs.slice(0, 3).map((e) => `<button type="button" class="sc-chip ${e.status}${sch.cur && sch.cur.event.id === e.id ? ' on' : ''}" onclick="event.stopPropagation();schShow(${e.id})" title="${escapeAttr(e.title)}"><span>${schClock(e.time)}</span> ${escapeHtml(e.title)}</button>`).join('');
+    const more = evs.length > 3 ? `<button type="button" class="sc-more" onclick="event.stopPropagation();schDay('${iso}')">+${evs.length - 3} lagi</button>` : '';
+    html += `<div class="sc-day${inMonth ? '' : ' out'}${iso === today ? ' today' : ''}${iso < today ? ' past' : ''}" onclick="schDayClick('${iso}')">
+      <div class="sc-num">${Number(iso.slice(8))}</div>${chips}${more}</div>`;
   }
-  box.innerHTML = schedDetail(sched.details[key]);
+  document.getElementById('scGrid').innerHTML = html;
 }
 
-function schedDetail({ job, runs, output }) {
-  const out = output.latest;
-  const result = out
-    ? `<div class="sch-sec"><div class="sch-sec-h">Hasil terakhir <span>${escapeHtml(schedWhen(out.name.replace(/^(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2}).*/, '$1T$2:$3:$4')))}</span></div>
-        <div class="was-result sch-result">${formatMsg(out.response != null ? out.response : out.text)}</div>
-        ${out.response != null ? `<details class="sch-full"><summary>Tampilkan file lengkap (instruksi + data skrip)</summary><pre>${escapeHtml(out.text)}${out.truncated ? '\n… (dipotong)' : ''}</pre></details>` : ''}
-      </div>`
-    : '<div class="sch-sec"><div class="sch-sec-h">Hasil terakhir</div><div class="wa-msg">Belum ada hasil tersimpan.</div></div>';
-  const rows = runs.map((r) => `<tr><td>${escapeHtml(schedWhen(r.startedAt))}</td><td>${escapeHtml(schedDuration(r.startedAt, r.finishedAt))}</td>
-      <td>${schedRunPill(r.status)}</td><td>${escapeHtml(r.delivery === 'delivered' ? 'Terkirim' : r.delivery || '—')}${r.error ? `<div class="sch-run-err">${escapeHtml(String(r.error).slice(0, 300))}</div>` : ''}</td></tr>`).join('');
-  const history = `<div class="sch-sec"><div class="sch-sec-h">Riwayat run <span>${runs.length ? runs.length + ' terakhir' : ''}</span></div>
-      ${runs.length ? `<table class="sch-runs"><thead><tr><th>Mulai</th><th>Durasi</th><th>Status</th><th>Pengiriman</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="wa-msg">Belum ada run tercatat.</div>'}</div>`;
-  const prompt = job.prompt
-    ? `<div class="sch-sec"><div class="sch-sec-h">Instruksi ke agent</div><div class="sch-prompt">${escapeHtml(job.prompt)}</div></div>` : '';
-  const extra = [
-    job.script ? `<div><dt>Skrip sebelum run</dt><dd><code>${escapeHtml(job.script)}</code></dd></div>` : '',
-    job.skills.length ? `<div><dt>Skill</dt><dd>${job.skills.map((s) => escapeHtml(String(s))).join(', ')}</dd></div>` : '',
-    job.deliver ? `<div><dt>Tujuan (raw)</dt><dd><code>${escapeHtml(job.deliver.platform + ':' + job.deliver.target)}</code></dd></div>` : '',
-    `<div><dt>ID</dt><dd><code>${escapeHtml(job.id)}</code></dd></div>`,
-    job.createdAt ? `<div><dt>Dibuat</dt><dd>${escapeHtml(schedWhen(job.createdAt))}</dd></div>` : ''
-  ].join('');
-  return result + history + prompt + `<div class="sch-sec"><dl class="sch-facts sch-meta">${extra}</dl></div>`;
+// An empty spot on a day: a new event on that date (not in the past).
+function schDayClick(iso) {
+  if (iso < schToday()) { schDay(iso); return; }
+  schNew(iso);
+}
+function schDay(iso) {
+  const evs = sch.events.filter((e) => e.date === iso);
+  if (evs.length === 1) { schShow(evs[0].id); return; }
+  schStopPoll();
+  sch.panel = 'day'; sch.dayIso = iso; sch.cur = null;
+  schRenderPanel();
+}
+
+function schRenderPanel() {
+  const el = document.getElementById('scPanel');
+  if (!el) return;
+  if (sch.panel === 'form') el.innerHTML = schFormHtml();
+  else if (sch.panel === 'event' && sch.cur) el.innerHTML = schEventHtml(sch.cur);
+  else if (sch.panel === 'day') {
+    const evs = sch.events.filter((e) => e.date === sch.dayIso);
+    el.innerHTML = `<div class="sc-ph"><h3>${escapeHtml(waDay(sch.dayIso + 'T12:00:00+07:00'))}</h3><button class="wa-btn ghost" type="button" onclick="schShowUpcoming()">Tutup</button></div>
+      ${evs.length ? evs.map(schCardHtml).join('') : '<div class="wa-msg">Tidak ada acara di tanggal ini.</div>'}`;
+  } else {
+    el.innerHTML = `<div class="sc-ph"><h3>Acara mendatang</h3></div>
+      ${sch.upcoming.length ? sch.upcoming.map(schCardHtml).join('') : `<div class="sc-empty">
+        <div class="sc-empty-ic">🗓</div><b>Belum ada acara</b>
+        <p>Tulis agendanya, kapan dan di mana. Aurix akan menyusun agenda meeting, lalu bot bisa mengirimkannya ke grup WhatsApp beserta pengingat.</p>
+        <button class="wa-btn primary" type="button" onclick="schNew()">+ Buat acara</button></div>`}`;
+  }
+}
+
+function schShowUpcoming() { schStopPoll(); sch.panel = 'upcoming'; sch.cur = null; schRenderCal(); schRenderPanel(); }
+
+function schCardHtml(e) {
+  const d = new Date(e.date + 'T12:00:00+07:00');
+  return `<button type="button" class="sc-card ${e.status}" onclick="schShow(${e.id})">
+      <div class="sc-date"><b>${Number(e.date.slice(8))}</b><span>${SCH_MONTHS[d.getUTCMonth()].slice(0, 3)}</span></div>
+      <div class="sc-card-body"><div class="sc-card-title">${escapeHtml(e.title)}</div>
+        <div class="sc-card-meta">${schClock(e.time)} WIB${e.location ? ' · ' + escapeHtml(e.location) : ''}</div>
+        <span class="wa-pill ${SCH_STATUS[e.status][0]}">${e.status === 'sent' ? 'Terkirim' : e.status === 'draft' ? 'Draf' : 'Dibatalkan'}</span></div>
+    </button>`;
+}
+
+/* ── Form: create / edit ── */
+function schNew(date) {
+  schStopPoll();
+  const today = schToday();
+  sch.panel = 'form'; sch.cur = null;
+  sch.editing = { id: null, title: '', date: date && date >= today ? date : today, time: '10:00', durationMin: 60, location: '', attendees: '', notes: '', groups: [], reminders: (sch.options && sch.options.defaultReminders) || ['d1', 'm60'] };
+  schRenderCal(); schRenderPanel();
+  setTimeout(() => { const t = document.getElementById('scTitle'); if (t) t.focus(); }, 0);
+}
+function schEdit() {
+  const e = sch.cur.event;
+  schStopPoll();
+  sch.panel = 'form';
+  sch.editing = { id: e.id, title: e.title, date: e.date, time: e.time, durationMin: e.durationMin, location: e.location || '', attendees: e.attendees || '', notes: e.notes || '', groups: e.groups.map((g) => g.id), reminders: e.reminders, sent: e.status === 'sent' };
+  schRenderPanel();
+}
+
+function schFormHtml() {
+  const f = sch.editing;
+  const durs = SCH_DURATIONS.some(([v]) => v === f.durationMin) ? SCH_DURATIONS : [...SCH_DURATIONS, [f.durationMin, f.durationMin + ' menit']];
+  const groups = sch.groups === null ? '<div class="wa-msg"><span class="wa-spin"></span>Memuat grup…</div>'
+    : sch.groups.length ? sch.groups.map((g) => `<label class="sc-check"><input type="checkbox" name="scGroup" value="${escapeAttr(g.id)}"${f.groups.includes(g.id) ? ' checked' : ''}> ${escapeHtml(waGroupName(g))}</label>`).join('')
+      : '<div class="wa-msg">Belum ada grup. Grup muncul setelah bot menerima pesan di grup itu (lihat Pilih Group).</div>';
+  const rems = ((sch.options && sch.options.reminders) || []).map((r) => `<button type="button" class="${f.reminders.includes(r.key) ? 'on' : ''}" data-key="${r.key}" onclick="this.classList.toggle('on')">${escapeHtml(r.label)}</button>`).join('');
+  return `<div class="sc-ph"><h3>${f.id ? 'Ubah acara' : 'Buat acara'}</h3><button class="wa-btn ghost" type="button" onclick="${f.id ? `schShow(${f.id})` : 'schShowUpcoming()'}">Batal</button></div>
+    <form class="sc-form" onsubmit="event.preventDefault();schSave()">
+      <label>Agenda / judul acara<input id="scTitle" maxlength="200" required placeholder="mis. Rapat evaluasi penjualan Q4" value="${escapeAttr(f.title)}"></label>
+      <div class="sc-row3">
+        <label>Tanggal<input type="date" id="scDate" required value="${f.date}"${f.id ? '' : ` min="${schToday()}"`}></label>
+        <label>Jam (WIB)<input type="time" id="scTime" required value="${f.time}"></label>
+        <label>Durasi<select id="scDur">${durs.map(([v, l]) => `<option value="${v}"${v === f.durationMin ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      </div>
+      <label>Lokasi<input id="scLoc" maxlength="300" placeholder="Ruang rapat, alamat, atau link Zoom/Meet" value="${escapeAttr(f.location)}"></label>
+      <label><span>Peserta <span class="sc-opt">(opsional)</span></span><input id="scWho" maxlength="500" placeholder="mis. Irfan, Cahyo, tim marketing" value="${escapeAttr(f.attendees)}"></label>
+      <label><span>Catatan untuk agent <span class="sc-opt">(opsional)</span></span><textarea id="scNotes" maxlength="2000" rows="3" placeholder="Poin yang ingin dibahas, target meeting, dll.">${escapeHtml(f.notes)}</textarea></label>
+      <div class="sc-field"><div class="sc-label">Kirim ke grup WhatsApp</div><div class="sc-groups">${groups}</div></div>
+      <div class="sc-field"><div class="sc-label">Pengingat ke grup</div><div class="was-chips sc-rems" id="scRems">${rems}</div></div>
+      <div class="sc-form-foot">
+        <span class="sc-hint">${f.id ? (f.sent ? 'Pengingat yang belum terkirim ikut menyesuaikan.' : 'Belum ada yang dikirim ke grup.') : 'Aurix menyusun agendanya; Anda cek dulu sebelum dikirim.'}</span>
+        <button class="wa-btn primary" type="submit" id="scSave">${f.id ? 'Simpan' : 'Simpan & susun agenda'}</button>
+      </div>
+    </form>`;
+}
+
+async function schSave() {
+  const f = sch.editing;
+  const body = {
+    title: document.getElementById('scTitle').value, date: document.getElementById('scDate').value, time: document.getElementById('scTime').value,
+    durationMin: Number(document.getElementById('scDur').value), location: document.getElementById('scLoc').value,
+    attendees: document.getElementById('scWho').value, notes: document.getElementById('scNotes').value,
+    reminders: [...document.querySelectorAll('#scRems button.on')].map((b) => b.dataset.key)
+  };
+  // Keep the chosen groups if the list could not load.
+  if (sch.groups && sch.groups.length) body.groups = [...document.querySelectorAll('input[name="scGroup"]:checked')].map((i) => i.value);
+  else if (!f.id) body.groups = [];
+  const btn = document.getElementById('scSave');
+  btn.disabled = true;
+  try {
+    const out = f.id ? await api('PATCH', '/api/events/' + f.id, body) : await api('POST', '/api/events', body);
+    sch.cur = out; sch.panel = 'event'; sch.agendaEdit = false; sch.confirm = null;
+    const [y, m] = out.event.date.split('-').map(Number);
+    sch.y = y; sch.m = m;
+    await schLoad();
+    schRenderPanel(); schPollIfNeeded();
+    showToast(f.id ? 'Acara disimpan' : 'Acara dibuat — Aurix sedang menyusun agenda');
+  } catch (e) {
+    btn.disabled = false;
+    showToast(e.message);
+  }
+}
+
+/* ── One event ── */
+async function schShow(id) {
+  schStopPoll();
+  sch.panel = 'event'; sch.agendaEdit = false; sch.confirm = null;
+  try { sch.cur = await api('GET', '/api/events/' + id); }
+  catch (e) { showToast('Gagal memuat acara: ' + e.message); return; }
+  if (waPage !== 'schedule' || sch.panel !== 'event') return;
+  schRenderCal(); schRenderPanel(); schPollIfNeeded();
+}
+
+// While Aurix writes, or the bot is still sending, refresh the panel.
+function schPollIfNeeded() {
+  schStopPoll();
+  const c = sch.cur;
+  if (!c) return;
+  const busy = c.event.agendaStatus === 'running' || c.messages.some((m) => m.status === 'pending' && m.dueAt <= Date.now() + 60000);
+  if (!busy) return;
+  sch.poll = setTimeout(async () => {
+    if (waPage !== 'schedule' || sch.panel !== 'event' || !sch.cur || sch.cur.event.id !== c.event.id) return;
+    try {
+      const fresh = await api('GET', '/api/events/' + c.event.id);
+      if (sch.panel !== 'event' || !sch.cur || sch.cur.event.id !== c.event.id) return;
+      // Don't redraw over a half-typed agenda edit.
+      if (!sch.agendaEdit) { sch.cur = fresh; schRenderPanel(); }
+      if (c.event.agendaStatus === 'running' && fresh.event.agendaStatus !== 'running') schLoad().catch(() => {});
+    } catch (e) { /* try again next round */ }
+    schPollIfNeeded();
+  }, 2500);
+}
+
+function schEventHtml({ event: e, messages }) {
+  const [cls, label] = SCH_STATUS[e.status];
+  const live = e.status !== 'cancelled';
+  const remLabels = ((sch.options && sch.options.reminders) || []).filter((r) => e.reminders.includes(r.key)).map((r) => r.label);
+  const facts = [
+    ['🗓', escapeHtml(e.when)],
+    e.location ? ['📍', linkify(escapeHtml(e.location))] : null,
+    e.attendees ? ['👥', escapeHtml(e.attendees)] : null,
+    e.notes ? ['📝', escapeHtml(e.notes)] : null
+  ].filter(Boolean).map(([i, t]) => `<div class="sc-fact"><span>${i}</span><div>${t}</div></div>`).join('');
+
+  let agenda;
+  if (e.agendaStatus === 'running') {
+    agenda = '<div class="sc-agenda-wait"><span class="wa-spin"></span>Aurix sedang menyusun agenda… biasanya kurang dari satu menit.</div>';
+  } else if (e.agendaStatus === 'error') {
+    agenda = `<div class="wa-msg err">Agenda gagal disusun: ${escapeHtml(e.agendaError || '')}</div>
+      <div class="sc-actions"><button class="wa-btn primary" type="button" onclick="schRewrite()">Coba lagi</button></div>`;
+  } else if (sch.agendaEdit) {
+    agenda = `<textarea class="sc-agenda-edit" id="scAgenda" maxlength="4000" rows="14">${escapeHtml(e.agenda || '')}</textarea>
+      <div class="sc-hint">Format WhatsApp: *tebal*, _miring_, ~coret~.</div>
+      <div class="sc-actions"><button class="wa-btn ghost" type="button" onclick="sch.agendaEdit=false;schRenderPanel();schPollIfNeeded()">Batal</button>
+        <button class="wa-btn primary" type="button" onclick="schSaveAgenda()">Simpan agenda</button></div>`;
+  } else {
+    agenda = `${e.agendaStale && live ? '<div class="sc-stale">Detail acara berubah setelah agenda disusun. <button type="button" onclick="schRewrite()">Susun ulang</button></div>' : ''}
+      <div class="sc-bubble">${linkify(schWa(e.agenda))}<div class="sc-bubble-by">Pratinjau di WhatsApp</div></div>
+      ${live ? `<div class="sc-actions"><button class="wa-btn ghost" type="button" onclick="sch.agendaEdit=true;schStopPoll();schRenderPanel()">Ubah teks</button>
+        <button class="wa-btn ghost" type="button" onclick="schRewrite()">Susun ulang oleh Aurix</button></div>` : ''}`;
+  }
+
+  const ready = e.agendaStatus === 'done' && !sch.agendaEdit;
+  const groupNames = e.groups.map((g) => escapeHtml(g.name || g.id)).join(', ');
+  let send = '';
+  if (live) {
+    const planned = `<div class="sc-plan"><div><span>Grup</span><b>${groupNames || '<i>belum dipilih</i>'}</b></div>
+        <div><span>Pengingat</span><b>${remLabels.length ? escapeHtml(remLabels.join(', ')) : 'tidak ada'}</b></div></div>`;
+    if (sch.confirm === 'send') {
+      send = `${planned}<div class="sc-confirm"><p>Bot akan mengirim agenda di atas ke <b>${e.groups.length} grup</b> sekarang${remLabels.length ? ', lalu pengingat sesuai jadwal' : ''}.</p>
+        <div class="sc-actions"><button class="wa-btn ghost" type="button" onclick="sch.confirm=null;schRenderPanel()">Batal</button>
+        <button class="wa-btn primary" type="button" id="scSendGo" onclick="schSend()">Ya, kirim sekarang</button></div></div>`;
+    } else {
+      const why = !e.groups.length ? 'Pilih grup dulu lewat "Ubah".' : !ready ? 'Tunggu agenda siap.' : '';
+      send = `${planned}<div class="sc-actions">${why ? `<span class="sc-hint">${why}</span>` : ''}
+        <button class="wa-btn primary" type="button" onclick="sch.confirm='send';schRenderPanel()"${why ? ' disabled' : ''}>${e.status === 'sent' ? 'Kirim ulang ke grup' : 'Kirim ke grup'}</button></div>`;
+    }
+  }
+
+  const KIND = { agenda: '📋 Agenda', cancel: '❌ Pembatalan' };
+  const MSG = { sent: ['ok', 'Terkirim'], error: ['bad', 'Gagal'], skipped: ['warn', 'Dilewati'] };
+  const rows = messages.map((m) => {
+    const [mc, ml] = m.status === 'pending' ? (m.attempts ? ['warn', 'Mencoba ulang'] : ['wait', m.dueAt <= Date.now() ? 'Mengirim…' : 'Terjadwal']) : MSG[m.status];
+    return `<tr><td>${escapeHtml(m.kind === 'reminder' ? '⏰ ' + (m.reminderLabel || 'Pengingat') : KIND[m.kind])}</td>
+      <td>${escapeHtml(m.groupName || m.chatId)}</td><td>${escapeHtml(schWibStamp(m.sentAt || m.dueAt))}</td>
+      <td><span class="wa-pill ${mc}">${ml}</span>${m.error && m.status !== 'sent' ? `<div class="sc-err">${escapeHtml(m.error)}</div>` : ''}</td></tr>`;
+  }).join('');
+  const log = messages.length ? `<div class="sc-sec"><div class="sc-sec-h">Pengiriman bot</div>
+      <table class="sc-msgs"><thead><tr><th>Pesan</th><th>Grup</th><th>Waktu</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>` : '';
+
+  let manage = '';
+  if (sch.confirm === 'cancel') {
+    manage = `<div class="sc-confirm"><p>Batalkan acara ini? Pengingat yang belum terkirim dihentikan.</p><div class="sc-actions">
+      <button class="wa-btn ghost" type="button" onclick="sch.confirm=null;schRenderPanel()">Kembali</button>
+      ${e.status === 'sent' ? '<button class="wa-btn ghost" type="button" onclick="schCancel(false)">Batalkan tanpa kabar</button><button class="wa-btn danger" type="button" onclick="schCancel(true)">Batalkan & kabari grup</button>'
+        : '<button class="wa-btn danger" type="button" onclick="schCancel(false)">Ya, batalkan</button>'}</div></div>`;
+  } else if (sch.confirm === 'delete') {
+    manage = `<div class="sc-confirm"><p>Hapus acara ini? Belum ada yang dikirim ke grup.</p><div class="sc-actions">
+      <button class="wa-btn ghost" type="button" onclick="sch.confirm=null;schRenderPanel()">Kembali</button>
+      <button class="wa-btn danger" type="button" onclick="schDelete()">Ya, hapus</button></div></div>`;
+  } else if (live) {
+    manage = `<div class="sc-actions sc-manage"><button class="wa-btn ghost" type="button" onclick="schEdit()">Ubah</button>
+      ${e.status === 'sent' ? '<button class="wa-btn ghost" type="button" onclick="sch.confirm=\'cancel\';schRenderPanel()">Batalkan acara</button>'
+        : '<button class="wa-btn ghost" type="button" onclick="sch.confirm=\'delete\';schRenderPanel()">Hapus</button>'}</div>`;
+  } else {
+    manage = `<div class="sc-actions sc-manage"><button class="wa-btn ghost" type="button" onclick="sch.confirm='delete';schRenderPanel()">Hapus dari kalender</button></div>`;
+  }
+
+  return `<div class="sc-ph"><button class="sc-back" type="button" onclick="schShowUpcoming()">‹ Semua acara</button></div>
+    <div class="sc-ev-head"><h2>${escapeHtml(e.title)}</h2><span class="wa-pill ${cls}">${label}</span></div>
+    <div class="sc-facts">${facts}</div>
+    <div class="sc-by">Dibuat oleh ${escapeHtml(e.createdBy || '—')}${e.sentAt ? ` · dikirim oleh ${escapeHtml(e.sentBy || '—')}, ${escapeHtml(schWibStamp(e.sentAt))}` : ''}</div>
+    ${manage}
+    <div class="sc-sec"><div class="sc-sec-h">Agenda meeting <span>disusun Aurix</span></div>${agenda}</div>
+    ${live ? `<div class="sc-sec"><div class="sc-sec-h">Kirim ke grup WhatsApp</div>${send}</div>` : ''}
+    ${log}`;
+}
+
+async function schAct(fn, okMsg) {
+  try {
+    sch.cur = await fn();
+    sch.confirm = null;
+    if (okMsg) showToast(okMsg);
+  } catch (e) { showToast(e.message); }
+  schRenderPanel(); schPollIfNeeded();
+  schLoad().catch(() => {});
+}
+function schRewrite() { sch.agendaEdit = false; return schAct(() => api('POST', `/api/events/${sch.cur.event.id}/agenda`), 'Aurix menyusun ulang agenda'); }
+function schSaveAgenda() {
+  const text = document.getElementById('scAgenda').value;
+  sch.agendaEdit = false;
+  return schAct(() => api('PUT', `/api/events/${sch.cur.event.id}/agenda`, { agenda: text }), 'Agenda disimpan');
+}
+function schSend() {
+  const b = document.getElementById('scSendGo');
+  if (b) b.disabled = true;
+  return schAct(() => api('POST', `/api/events/${sch.cur.event.id}/send`), 'Agenda dikirim ke grup');
+}
+function schCancel(notify) { return schAct(() => api('POST', `/api/events/${sch.cur.event.id}/cancel`, { notify }), notify ? 'Acara dibatalkan, grup dikabari' : 'Acara dibatalkan'); }
+async function schDelete() {
+  try { await api('DELETE', '/api/events/' + sch.cur.event.id); }
+  catch (e) { showToast(e.message); return; }
+  showToast('Acara dihapus');
+  sch.panel = 'upcoming'; sch.cur = null; sch.confirm = null;
+  await schLoad().catch(() => {});
+  schRenderPanel();
 }
 
 /* ── Page registry: one container per WhatsApp page ── */
@@ -1265,7 +1470,7 @@ const WA_IMPL = {
   connect: { el: 'waConnect', open: waConnectOpen, close: waConnectClose },
   groups: { el: 'waGroupsPage', open: waGroupsOpen, close: waGroupsClose },
   summary: { el: 'waSummaryPage', open: waSummaryOpen, close: waSummaryClose },
-  schedule: { el: 'schedulePage', open: schedOpen, close: schedClose }
+  schedule: { el: 'schedulePage', open: schOpen, close: schClose }
 };
 function closeWaPages() { for (const p of Object.values(WA_IMPL)) p.close(); }
 

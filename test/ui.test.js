@@ -43,12 +43,19 @@ test('chat navigation closes a WhatsApp page; reload on #wa-<page> reopens it', 
   }
 });
 
-// EPIC-009 T-046: the Schedule item opens the read-only schedule page.
-test('sidebar Schedule opens its own page at #schedule', () => {
+// EPIC-009: the Schedule item opens Jadwal & Meeting (calendar + events).
+test('sidebar Schedule opens Jadwal & Meeting at #schedule', () => {
   assert.match(html, /<div class="nav-item" data-wa="schedule" onclick="openWaPage\('schedule'\)">[\s\S]*?<\/span>\s*Schedule\s*<\/div>/);
-  assert.match(js, /\bschedule: \{ title: '[^']+', crumb: 'Schedule', hash: 'schedule' \}/);
-  assert.match(js, /\bschedule: \{ el: 'schedulePage', open: schedOpen, close: schedClose \}/);
-  assert.match(html, /id="schedulePage"/);
+  assert.match(js, /\bschedule: \{ title: 'Jadwal & Meeting', crumb: 'Schedule', hash: 'schedule' \}/);
+  assert.match(js, /\bschedule: \{ el: 'schedulePage', open: schOpen, close: schClose \}/);
+  assert.match(html, /<div class="wa-page wa-full hidden" id="schedulePage">/);
   assert.match(html, /id="waCrumb"/);
-  assert.match(js, /api\('GET', '\/api\/schedule\/jobs'\)/);
+  assert.doesNotMatch(js, /\/api\/schedule\/jobs/, 'the cron page is gone');
+});
+
+test('nothing is sent to a group without the confirm step', () => {
+  // The only call to .../send is schSend(), reached from the "Ya, kirim sekarang" button.
+  assert.deepStrictEqual(js.match(/\/send`\)/g), ['/send`)']);
+  assert.match(js, /onclick="schSend\(\)">Ya, kirim sekarang<\/button>/);
+  assert.strictEqual((js.match(/schSend\(\)/g) || []).length, 2, 'defined once, called once');
 });

@@ -20,7 +20,7 @@ const { createGateway, DEFAULT_URL: DEFAULT_GATEWAY_URL } = require('./lib/gatew
 const { createApi } = require('./lib/api');
 const { createWhatsApp } = require('./lib/whatsapp');
 const { createWaArchive } = require('./lib/wa-archive');
-const { createSchedule } = require('./lib/schedule');
+const { createEvents } = require('./lib/events');
 
 // Fail fast on bad config. Production (systemd) must provide the Hermes
 // API key; CHAT_DEV=1 is the explicit opt-out for local UI work. See .env.example.
@@ -108,6 +108,14 @@ const whatsapp = createWhatsApp({
 
 const gateway = createGateway({ url: GATEWAY, key: HERMES_API_KEY });
 
+// Schedule (EPIC-009): events, Aurix agendas, and the outbox the bot sends
+// (agenda on "Kirim", then reminders). The worker checks the outbox every 30s.
+const events = createEvents({
+  db, gateway,
+  onEvent: (event, username, detail) => audit.record(db, { event, username, ip: 'web', detail })
+});
+events.start();
+
 const api = createApi({
   db,
   gateway,
@@ -116,8 +124,7 @@ const api = createApi({
   whatsapp,
   // Group reading + summaries from Hermes' WhatsApp group archive (read only).
   waArchive: createWaArchive({ db, gateway }),
-  // Agent schedules from Hermes' cron files (read only).
-  schedule: createSchedule({ db })
+  events
 });
 
 // Keep only a basename, and only characters that are safe in a shell argument
