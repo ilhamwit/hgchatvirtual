@@ -69,3 +69,13 @@ test('sidebar Task Focus opens #tasks with a real badge', () => {
   assert.match(js, /api\('GET', '\/api\/tasks\/summary'\)/);
   assert.doesNotMatch(html, /Chat &amp; Discussion <span class="nb">3<\/span>/, 'no made-up unread count');
 });
+
+// EPIC-011: sessions per agent with a right-click menu; files open in a viewer.
+test('history is per agent with a session menu; attachments open in the viewer', () => {
+  assert.match(js, /const mine = convs\.filter\(c => c\.agentId === current\.id\);/);
+  assert.match(js, /oncontextmenu="histMenu\(event,'\$\{c\.id\}'\)"/);
+  for (const action of ['renameConv', 'setArchived', 'deleteConv']) assert.match(js, new RegExp(`onclick="closeCtx\\(\\);${action}\\(`), action);
+  assert.match(js, /await confirmDialog\(/, 'delete asks first');
+  assert.match(js, /'\/api\/files\/' \+ encodeURIComponent/);
+  for (const id of ['ctxMenu', 'confirmBox', 'fileViewer', 'archBanner', 'skAgent']) assert.match(html, new RegExp(`id="${id}"`), id);
+});

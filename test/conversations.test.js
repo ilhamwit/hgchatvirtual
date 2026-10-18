@@ -202,7 +202,7 @@ test('input limits', async () => {
   const c = await newConv(a);
   assert.strictEqual((await send(a, c.id, '   ')).status, 400, 'empty');
   assert.strictEqual((await send(a, c.id, 'x'.repeat(20001))).status, 400, 'too long');
-  assert.strictEqual((await srv.json(a, 'DELETE', `/api/conversations/${c.id}`)).status, 405);
+  assert.strictEqual((await srv.json(a, 'PUT', `/api/conversations/${c.id}`)).status, 405, 'DELETE exists since EPIC-011; PUT does not');
   assert.strictEqual((await srv.json(a, 'GET', '/api/nope')).status, 404);
 });
 

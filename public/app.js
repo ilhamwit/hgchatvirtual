@@ -271,9 +271,9 @@ function formatMsg(text) {
 }
 
 // ─── Conversations (stored on the server, per user) ───
-// One conversation = one agent + one Hermes session. Each agent shows one
-// conversation at a time; "Chat baru" starts a fresh one.
-let convs = [];             // the user's non-archived conversations, newest first
+// One conversation (session) = one agent + one Hermes session. An agent can
+// have many; the history panel lists the selected agent's sessions (EPIC-011).
+let convs = [];             // the user's conversations incl. archived, newest first
 const activeConv = {};      // agentId -> conversation id on screen (null = new chat)
 const pending = {};         // conversation id -> true while the agent is answering
 let viewSeq = 0;            // bumps on every switch so late responses don't draw over
@@ -287,7 +287,7 @@ function fmtTime(ms) {
 
 async function refreshConvs() {
   try {
-    const data = await api('GET', '/api/conversations');
+    const data = await api('GET', '/api/conversations?archived=1');
     convs = data.conversations;
     for (const c of convs) { if (c.pending) pending[c.id] = true; else delete pending[c.id]; }
   } catch (e) { showToast('⚠️ Gagal memuat riwayat: ' + e.message); }
@@ -296,7 +296,7 @@ async function refreshConvs() {
 
 function convIdFor(agentId) {
   if (agentId in activeConv) return activeConv[agentId];
-  const latest = convs.find(c => c.agentId === agentId);
+  const latest = convs.find(c => c.agentId === agentId && !c.archived);
   activeConv[agentId] = latest ? latest.id : null;
   return activeConv[agentId];
 }
@@ -351,31 +351,143 @@ async function retryMsg(btn) {
 
 function truncate(s,n) { s=s.replace(/\s+/g,' ').trim(); return s.length>n ? s.slice(0,n-1)+'…' : s; }
 
+let histShowArchived = false;
+
+function histCard(c) {
+  const last = c.lastMessage;
+  const prefix = !last ? '' : last.role==='user' ? 'Anda: ' : last.role==='error' ? '⚠️ ' : '';
+  const on = activeConv[current.id]===c.id;
+  return `<div class="hist-item${on?' on':''}${c.archived?' arch':''}" data-id="${c.id}" onclick="openConversation('${c.agentId}','${c.id}')" oncontextmenu="histMenu(event,'${c.id}')">
+      <div class="hist-info">
+        <div class="hist-row1"><span class="hist-name">${pending[c.id]?'<span class="hist-busy" title="Agent sedang menjawab"></span>':''}${escapeHtml(truncate(c.title || 'Sesi tanpa judul', 60))}</span><span class="hist-time">${fmtTime(c.updatedAt)}</span></div>
+        <div class="hist-preview">${last ? escapeHtml(prefix+truncate(last.content || (last.role==='user' ? '📎 Lampiran' : ''),70)) : '<i>Belum ada pesan</i>'}</div>
+      </div>
+      <button class="hist-more" type="button" title="Menu sesi" aria-label="Menu sesi" onclick="event.stopPropagation();histMenu(event,'${c.id}')">⋯</button>
+    </div>`;
+}
+
+// The selected agent's sessions; archived ones in their own section.
 function renderHistoryPanel() {
   const body = document.getElementById('histBody');
   if(!body) return;
-  const items = convs.filter(c => c.lastMessage && AGENTS.some(a => a.id === c.agentId));
-  if(!items.length) {
-    body.innerHTML = `<div class="hist-empty">
+  const label = document.getElementById('skAgent');
+  if (label) label.textContent = '· ' + current.name;
+  const mine = convs.filter(c => c.agentId === current.id);
+  const active = mine.filter(c => !c.archived && (c.lastMessage || activeConv[current.id] === c.id));
+  const archived = mine.filter(c => c.archived);
+  let html = active.length ? active.map(histCard).join('') : `<div class="hist-empty">
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#C9C9D6" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-      <p>Belum ada riwayat percakapan.<br>Mulai chat dengan salah satu agent.</p>
+      <p>Belum ada sesi dengan ${escapeHtml(current.name)}.<br>Tulis pesan untuk memulai, atau tekan + untuk sesi baru.</p>
     </div>`;
-    return;
+  if (archived.length) {
+    html += `<button type="button" class="hist-arch-toggle" onclick="histShowArchived=!histShowArchived;renderHistoryPanel()">
+        ${histShowArchived ? '▾' : '▸'} Arsip <span>${archived.length}</span></button>`;
+    if (histShowArchived) html += archived.map(histCard).join('');
   }
-  body.innerHTML = items.map(c=>{
-    const agent = AGENTS.find(a => a.id === c.agentId);
-    const last = c.lastMessage;
-    const prefix = last.role==='user' ? 'Anda: ' : last.role==='error' ? '⚠️ ' : '';
-    const on = agent.id===current.id && activeConv[agent.id]===c.id;
-    const busy = pending[c.id] ? ' · …' : '';
-    return `<div class="hist-item${on?' on':''}" onclick="openConversation('${agent.id}','${c.id}')">
-      <div class="hist-avi"><img src="${agent.img}" alt="${agent.name}"></div>
-      <div class="hist-info">
-        <div class="hist-row1"><span class="hist-name">${agent.name}${busy}</span><span class="hist-time">${fmtTime(c.updatedAt)}</span></div>
-        <div class="hist-preview"><b>${escapeHtml(truncate(c.title || 'Tanpa judul', 40))}</b><br>${escapeHtml(prefix+truncate(last.content,54))}</div>
-      </div>
-    </div>`;
-  }).join('');
+  body.innerHTML = html;
+  updateArchBanner();
+}
+
+function updateArchBanner() {
+  const el = document.getElementById('archBanner');
+  if (!el) return;
+  const c = convs.find(x => x.id === activeConv[current.id]);
+  el.classList.toggle('hidden', !(c && c.archived));
+}
+
+/* ── Session menu: right-click a card, or its ⋯ button (EPIC-011) ── */
+function histMenu(ev, id) {
+  ev.preventDefault();
+  const c = convs.find(x => x.id === id);
+  if (!c) return;
+  const menu = document.getElementById('ctxMenu');
+  menu.innerHTML = `
+    <button type="button" role="menuitem" onclick="closeCtx();renameConv('${id}')">✏️ Ganti nama</button>
+    <button type="button" role="menuitem" onclick="closeCtx();setArchived('${id}', ${!c.archived})">${c.archived ? '📤 Keluarkan dari arsip' : '🗄️ Arsipkan'}</button>
+    <div class="ctx-sep"></div>
+    <button type="button" role="menuitem" class="danger" onclick="closeCtx();deleteConv('${id}')">🗑️ Hapus</button>`;
+  menu.classList.remove('hidden');
+  const r = ev.currentTarget && ev.type === 'click' ? ev.currentTarget.getBoundingClientRect() : null;
+  let x = r ? r.right - menu.offsetWidth : ev.clientX;
+  let y = r ? r.bottom + 4 : ev.clientY;
+  x = Math.max(8, Math.min(x, innerWidth - menu.offsetWidth - 8));
+  y = Math.max(8, Math.min(y, innerHeight - menu.offsetHeight - 8));
+  menu.style.left = x + 'px'; menu.style.top = y + 'px';
+  menu.querySelector('button').focus();
+}
+function closeCtx() { document.getElementById('ctxMenu').classList.add('hidden'); }
+document.addEventListener('click', (e) => { if (!e.target.closest('#ctxMenu') && !e.target.closest('.hist-more')) closeCtx(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCtx(); });
+window.addEventListener('blur', closeCtx);
+window.addEventListener('resize', closeCtx);
+
+// Rename in place: the title becomes an input; Enter or leaving it saves.
+function renameConv(id) {
+  const card = document.querySelector(`.hist-item[data-id="${id}"] .hist-name`);
+  const c = convs.find(x => x.id === id);
+  if (!card || !c) return;
+  card.innerHTML = `<input class="hist-rename" maxlength="80" value="${escapeAttr(c.title || '')}" placeholder="Nama sesi">`;
+  const input = card.querySelector('input');
+  input.onclick = (e) => e.stopPropagation();
+  let done = false;
+  const finish = async (save) => {
+    if (done) return; done = true;
+    const title = input.value.trim();
+    if (save && title && title !== c.title) {
+      try { const r = await api('PATCH', '/api/conversations/' + id, { title }); Object.assign(c, r.conversation); }
+      catch (e) { showToast('⚠️ Gagal mengganti nama: ' + e.message); }
+    }
+    renderHistoryPanel();
+  };
+  input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); finish(true); } else if (e.key === 'Escape') finish(false); };
+  input.onblur = () => finish(true);
+  input.focus(); input.select();
+}
+
+async function setArchived(id, archived) {
+  if (!id) return;
+  try {
+    const r = await api('PATCH', '/api/conversations/' + id, { archived });
+    const c = convs.find(x => x.id === id);
+    if (c) Object.assign(c, r.conversation);
+    if (archived) histShowArchived = histShowArchived || false;
+    showToast(archived ? 'Sesi diarsipkan' : 'Sesi dikeluarkan dari arsip');
+  } catch (e) { showToast('⚠️ ' + e.message); }
+  renderHistoryPanel();
+}
+
+async function deleteConv(id) {
+  const c = convs.find(x => x.id === id);
+  if (!c) return;
+  if (pending[id]) { showToast('⏳ Agent masih menjawab di sesi ini'); return; }
+  const ok = await confirmDialog(`Hapus sesi “${truncate(c.title || 'Sesi tanpa judul', 50)}”?`, 'Semua pesan di sesi ini akan dihapus permanen dan tidak bisa dikembalikan.', 'Hapus');
+  if (!ok) return;
+  try { await api('DELETE', '/api/conversations/' + id); }
+  catch (e) { showToast('⚠️ Gagal menghapus: ' + e.message); return; }
+  convs = convs.filter(x => x.id !== id);
+  if (activeConv[c.agentId] === id) {
+    delete activeConv[c.agentId];
+    if (current.id === c.agentId) loadHistoryView(c.agentId);
+  }
+  renderHistoryPanel();
+  showToast('Sesi dihapus');
+}
+
+// A small yes/no dialog; resolves true on the confirm button.
+function confirmDialog(title, text, okLabel) {
+  const box = document.getElementById('confirmBox');
+  box.innerHTML = `<div class="cfm-card"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(text)}</p>
+      <div class="cfm-actions"><button type="button" class="cfm-no">Batal</button><button type="button" class="cfm-yes">${escapeHtml(okLabel)}</button></div></div>`;
+  box.classList.remove('hidden');
+  return new Promise((resolve) => {
+    const end = (v) => { box.classList.add('hidden'); document.removeEventListener('keydown', key); resolve(v); };
+    const key = (e) => { if (e.key === 'Escape') end(false); };
+    box.querySelector('.cfm-no').onclick = () => end(false);
+    box.querySelector('.cfm-yes').onclick = () => end(true);
+    box.onclick = (e) => { if (e.target === box) end(false); };
+    document.addEventListener('keydown', key);
+    box.querySelector('.cfm-no').focus();
+  });
 }
 
 function openConversation(agentId, convId) {
@@ -400,6 +512,7 @@ async function loadHistoryView(agentId) {
   const seq = ++viewSeq;
   document.getElementById('msgArea').innerHTML='';
   updateSendBtn();
+  updateArchBanner();
   if (!convId) { showWelcome(true); return; }
   showWelcome(false);
   let data;
@@ -518,13 +631,119 @@ function renderAttRow() {
   }).join('');
 }
 
+/* ── Attachments in messages + the file viewer (EPIC-011) ─────
+   Images show as thumbnails; any attachment opens in a popup, like WhatsApp:
+   images (← → between them), PDF in the browser's viewer, text/CSV/JSON/
+   Markdown read in place. Office files and HEIC can only be downloaded. The
+   server only serves files from the user's own messages (/api/files/…). */
+const FV_IMAGE = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'];
+const FV_TEXT = ['txt', 'md', 'csv', 'tsv', 'json', 'yaml', 'yml', 'xml', 'log', 'ini', 'conf'];
+const FV_LABEL = { pdf: 'PDF', doc: 'Word', docx: 'Word', xls: 'Excel', xlsx: 'Excel', ppt: 'PowerPoint', pptx: 'PowerPoint', odt: 'Dokumen', ods: 'Spreadsheet', rtf: 'Dokumen', heic: 'Foto HEIC' };
+const fileExt = (n) => (String(n).match(/\.([A-Za-z0-9]{1,8})$/) || [, ''])[1].toLowerCase();
+const fileUrl = (a, dl) => '/api/files/' + encodeURIComponent(String(a.path).split('/').pop()) + (dl ? '?download=1' : '');
+
 function renderMsgAtt(att) {
   if(!att || !att.length) return '';
-  return '<div class="msg-att">' + att.map(a=>
-    '<span class="mt-chip" title="' + escapeAttr(a.path || a.name) + '">' + FILE_ICON +
-    '<span class="mt-name">' + escapeHtml(a.name) + '</span></span>'
-  ).join('') + '</div>';
+  const imgs = att.filter(a => a.path && FV_IMAGE.includes(fileExt(a.path)));
+  const rest = att.filter(a => !imgs.includes(a));
+  const data = (a) => `data-file="${escapeAttr(String(a.path).split('/').pop())}" data-name="${escapeAttr(a.name)}" data-size="${Number(a.size) || 0}"`;
+  return '<div class="msg-att">' +
+    imgs.map(a => `<button type="button" class="mt-img" ${data(a)} onclick="openFile(this)" title="${escapeAttr(a.name)}"><img src="${fileUrl(a)}" alt="${escapeAttr(a.name)}" loading="lazy" onerror="fileImgRetry(this)"></button>`).join('') +
+    rest.map(a => a.path
+      ? `<button type="button" class="mt-chip mt-open" ${data(a)} onclick="openFile(this)" title="Buka ${escapeAttr(a.name)}">${FILE_ICON}<span class="mt-name">${escapeHtml(a.name)}</span><span class="mt-ext">${escapeHtml((FV_LABEL[fileExt(a.path)] || fileExt(a.path)).toUpperCase())}</span></button>`
+      : `<span class="mt-chip" title="${escapeAttr(a.name)}">${FILE_ICON}<span class="mt-name">${escapeHtml(a.name)}</span></span>`).join('') +
+    '</div>';
 }
+
+// A just-sent image may be asked for a moment before the server has stored
+// the message: try again a few times.
+function fileImgRetry(img) {
+  const n = Number(img.dataset.tries || 0);
+  if (n >= 4) { img.closest('.mt-img').classList.add('broken'); return; }
+  img.dataset.tries = n + 1;
+  setTimeout(() => { img.src = img.src.split('?')[0] + '?r=' + (n + 1); }, 700 * (n + 1));
+}
+
+const fv = { list: [], i: 0 };
+function openFile(el) {
+  const area = el.closest('#msgArea');
+  const ext = fileExt(el.dataset.file);
+  // Images: browse every image in this chat, like a gallery.
+  fv.list = FV_IMAGE.includes(ext) && area ? [...area.querySelectorAll('.mt-img')] : [el];
+  fv.i = Math.max(0, fv.list.indexOf(el));
+  fvShow();
+}
+
+async function fvShow() {
+  const el = fv.list[fv.i];
+  const a = { path: el.dataset.file, name: el.dataset.name, size: Number(el.dataset.size) };
+  const ext = fileExt(a.path);
+  const url = fileUrl(a);
+  const box = document.getElementById('fileViewer');
+  const nav = fv.list.length > 1
+    ? `<button type="button" class="fv-nav prev" onclick="fvStep(-1)" aria-label="Sebelumnya"${fv.i ? '' : ' disabled'}>‹</button><button type="button" class="fv-nav next" onclick="fvStep(1)" aria-label="Berikutnya"${fv.i < fv.list.length - 1 ? '' : ' disabled'}>›</button>` : '';
+  let body;
+  if (FV_IMAGE.includes(ext)) body = `<img class="fv-img" src="${url}" alt="${escapeAttr(a.name)}">`;
+  else if (ext === 'pdf') body = `<iframe class="fv-pdf" src="${url}" title="${escapeAttr(a.name)}"></iframe>`;
+  else if (FV_TEXT.includes(ext)) body = '<div class="fv-doc"><div class="wa-msg"><span class="wa-spin"></span>Membuka file…</div></div>';
+  else body = `<div class="fv-none"><div class="fv-none-ic">${escapeHtml((FV_LABEL[ext] || ext || 'File').toUpperCase())}</div>
+      <b>${escapeHtml(a.name)}</b><p>Pratinjau belum tersedia untuk file ${escapeHtml(FV_LABEL[ext] || '.' + ext)}. Unduh untuk membukanya di aplikasi Anda.</p>
+      <a class="wa-btn primary" href="${fileUrl(a, true)}">Unduh file</a></div>`;
+  box.innerHTML = `<div class="fv-bar">
+      <div class="fv-title"><b>${escapeHtml(a.name)}</b><span>${escapeHtml([fmtSize(a.size), (FV_LABEL[ext] || ext).toUpperCase(), fv.list.length > 1 ? (fv.i + 1) + ' dari ' + fv.list.length : ''].filter(Boolean).join(' · '))}</span></div>
+      <a class="fv-btn" href="${fileUrl(a, true)}" title="Unduh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Unduh</a>
+      <button type="button" class="fv-btn" onclick="closeFile()" title="Tutup (Esc)" aria-label="Tutup">✕</button>
+    </div>
+    <div class="fv-body" onclick="if(event.target===this)closeFile()">${body}${nav}</div>`;
+  box.classList.remove('hidden');
+  if (!FV_TEXT.includes(ext)) return;
+  const doc = box.querySelector('.fv-doc');
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.status === 404 ? 'file tidak ditemukan' : 'HTTP ' + res.status);
+    let text = await res.text();
+    const cut = text.length > 300000;
+    if (cut) text = text.slice(0, 300000);
+    if (fv.list[fv.i] !== el) return;
+    let html;
+    if (ext === 'md') html = `<div class="fv-md">${formatMsg(text)}</div>`;
+    else if (ext === 'csv' || ext === 'tsv') html = fvTable(text, ext === 'tsv' ? '\t' : null);
+    else if (ext === 'json') { try { text = JSON.stringify(JSON.parse(text), null, 2); } catch (e) { /* show as is */ } html = `<pre>${escapeHtml(text)}</pre>`; }
+    else html = `<pre>${escapeHtml(text)}</pre>`;
+    doc.innerHTML = html + (cut ? '<div class="fv-cut">File terlalu panjang — hanya bagian awal yang ditampilkan. Unduh untuk melihat semuanya.</div>' : '');
+  } catch (e) {
+    doc.innerHTML = `<div class="wa-msg err">Gagal membuka file: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+// CSV/TSV as a table (first 500 rows). Quoted fields are respected.
+function fvTable(text, sep) {
+  if (!sep) { const first = text.split('\n', 1)[0]; sep = (first.split(';').length > first.split(',').length) ? ';' : ','; }
+  const rows = [];
+  let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length && rows.length < 501; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === sep) { row.push(cell); cell = ''; }
+    else if (ch === '\n') { row.push(cell.replace(/\r$/, '')); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  if (!rows.length) return '<div class="wa-msg">File kosong.</div>';
+  const [head, ...body] = rows;
+  return `<div class="fv-table"><table><thead><tr>${head.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
+    <tbody>${body.slice(0, 499).map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+
+function fvStep(d) { const j = fv.i + d; if (j >= 0 && j < fv.list.length) { fv.i = j; fvShow(); } }
+function closeFile() { const box = document.getElementById('fileViewer'); box.classList.add('hidden'); box.innerHTML = ''; }
+document.addEventListener('keydown', (e) => {
+  if (document.getElementById('fileViewer').classList.contains('hidden')) return;
+  if (e.key === 'Escape') closeFile();
+  else if (e.key === 'ArrowLeft') fvStep(-1);
+  else if (e.key === 'ArrowRight') fvStep(1);
+});
 
 const SEND_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
 const STOP_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';

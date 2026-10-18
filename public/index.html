@@ -116,8 +116,8 @@
     <div class="sockets" id="socketsPanel">
       <div class="sk-head">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9898B2" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-        <span class="sk-title">Chat History</span>
-        <button class="sk-menu" onclick="newChat()" title="Chat baru" aria-label="Chat baru"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        <span class="sk-title">Chat History <span class="sk-agent" id="skAgent"></span></span>
+        <button class="sk-menu" onclick="newChat()" title="Sesi chat baru" aria-label="Sesi chat baru"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
       </div>
       <div class="sk-body" id="histBody"></div>
     </div>
@@ -149,6 +149,9 @@
         </div>
       </div>
       <div class="view-chat flex1 hidden" id="viewChat">
+        <!-- EPIC-011: an archived session can be read; writing in it brings it back -->
+        <div class="arch-banner hidden" id="archBanner">Sesi ini ada di arsip. Membalas akan mengeluarkannya dari arsip.
+          <button type="button" onclick="setArchived(activeConv[current.id], false)">Keluarkan dari arsip</button></div>
         <div class="msgs" id="msgArea"></div>
         <div class="chat-chips">
           <button class="chip" onclick="quickSend('Suggest a reply')">💬 Suggest reply</button>
@@ -196,6 +199,10 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<!-- EPIC-011: session menu (right-click / ⋯), confirm dialog, file viewer -->
+<div class="ctx-menu hidden" id="ctxMenu" role="menu"></div>
+<div class="cfm hidden" id="confirmBox" role="dialog" aria-modal="true"></div>
+<div class="fv hidden" id="fileViewer" role="dialog" aria-modal="true"></div>
 
 <script src="/app.js"></script>
 </body>
