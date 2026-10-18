@@ -77,6 +77,7 @@ Keputusan pemilik (2026-10-19):
 
 - 2026-10-19 Epic dibuat atas permintaan pemilik ("catat sebagai EPIC-010 dan mulai tahap 1"), dengan keputusan default di atas. Riset: `~/.hermes/kanban.db` ada tetapi semua tabel kosong (tasks, task_runs, …) → tidak dipakai — on-progress
 - 2026-10-19 Tahap 1 selesai (T-053…T-057). Skema v6: `tasks` + `task_activity`. `lib/tasks.js`: validasi (judul wajib, penanggung jawab = user aktif, tenggat tanggal valid, prioritas/status enum), tanpa penanggung jawab → pembuat, riwayat kalimat per perubahan ("Cahyo mengubah tenggat menjadi 22 Okt 2026"), selesai dicap `done_by/done_at`, hapus hanya pembuat/admin (403), selesai >14 hari tidak tampil, ringkasan badge (terlambat + hari ini, WIB). API `/api/tasks…` (login wajib). UI `#tasks`: Fokus saya (Terlambat/Hari ini/7 hari ke depan/Nanti/Tanpa tenggat/Selesai hari ini), Papan tim (3 kolom, filter orang, seret untuk ubah status), panel detail (status, penanggung jawab, tenggat, prioritas, catatan, komentar & riwayat, hapus dengan konfirmasi), sapaan + angka hari ini. Badge sidebar asli (merah bila ada yang terlambat, refresh 5 menit); badge palsu "3" di Chat & Discussion dihapus. Tes 92/92 (6 baru untuk tasks, juga lulus dengan TZ=UTC), gates PASS, screenshot sandbox. Perlu restart chat-center.
+- 2026-10-19 Aktif di production lewat perpindahan ke user service (PID 441420): skema v6, `/healthz` ok. Tahap 1 menunggu dicoba tim.
 
 ## Dependencies
 
