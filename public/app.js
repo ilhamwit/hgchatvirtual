@@ -2147,7 +2147,7 @@ function dsTypingHtml(roomId, parentId, inThread) {
   const set = ds.typing.get(roomId + ':' + parentId);
   if (!set || !set.size) return '';
   const names = [...set].map((id) => dsAgent(id).name).join(', ');
-  return `<div class="ds-typing">${[...set].map((id) => dsAgentAvatar(id, 'sm')).join('')}<span class="ds-typing-dots"><i></i><i></i><i></i></span>${escapeHtml(names)} sedang menulis jawaban${inThread ? '' : ' di utas'}…</div>`;
+  return `<div class="ds-typing">${[...set].map((id) => dsAgentAvatar(id, 'sm')).join('')}<span class="ds-typing-dots"><i></i><i></i><i></i></span>${escapeHtml(names)} sedang menulis jawaban${inThread ? '' : ' di thread'}…</div>`;
 }
 
 function dsMsgHtml(m, prev, inThread) {
@@ -2160,7 +2160,7 @@ function dsMsgHtml(m, prev, inThread) {
   const replies = !inThread && m.replies ? `<button type="button" class="ds-replies" onclick="dsOpenThread(${m.id})">💬 ${m.replies} balasan<span> · terakhir ${escapeHtml(waClock(m.lastReplyAt))}</span></button>` : '';
   const typing = !inThread && !m.parentId && ds.cur ? dsTypingHtml(ds.cur.id, m.id, false) : '';
   const acts = m.deleted ? '' : `<div class="ds-acts">
-      ${inThread ? '' : `<button type="button" onclick="dsOpenThread(${m.id})" title="Balas di utas">💬</button>`}
+      ${inThread ? '' : `<button type="button" onclick="dsOpenThread(${m.id})" title="Balas di thread">💬</button>`}
       <button type="button" onclick="dsToTask(${m.id})" title="Jadikan tugas">✅</button>
       <button type="button" onclick="dsToEvent(${m.id})" title="Buat acara">🗓️</button>
       ${mine ? `<button type="button" onclick="dsEdit(${m.id})" title="Ubah">✏️</button><button type="button" onclick="dsDelete(${m.id})" title="Hapus">🗑️</button>` : ''}</div>`;
@@ -2196,7 +2196,7 @@ async function dsLoadOlder() {
 async function dsOpenThread(id) {
   const panel = document.getElementById('dsThread');
   panel.classList.remove('hidden');
-  panel.innerHTML = '<div class="wa-msg"><span class="wa-spin"></span>Memuat utas…</div>';
+  panel.innerHTML = '<div class="wa-msg"><span class="wa-spin"></span>Memuat thread…</div>';
   try {
     const r = await api('GET', `/api/rooms/${ds.cur.id}/messages?parent=${id}`);
     ds.thread = r.parent; ds.threadMsgs = r.messages;
@@ -2211,8 +2211,8 @@ function dsRenderThread(scroll, rebuild) {
     <div class="ds-thread-n">${ds.threadMsgs.filter((m) => !m.deleted).length} balasan</div>
     ${ds.threadMsgs.map((m, i) => dsMsgHtml(m, ds.threadMsgs[i - 1], true)).join('')}${dsTypingHtml(ds.cur.id, ds.thread.id, true)}`;
   if (rebuild || !panel.querySelector('.ds-thread-list')) {
-    panel.innerHTML = `<div class="ds-thread-h"><b>Utas</b><span>${escapeHtml(dsRoomName(dsRoom(ds.cur.id) || ds.cur))}</span>
-        <button type="button" onclick="dsCloseThread()" aria-label="Tutup utas">✕</button></div>
+    panel.innerHTML = `<div class="ds-thread-h"><b>Thread</b><span>${escapeHtml(dsRoomName(dsRoom(ds.cur.id) || ds.cur))}</span>
+        <button type="button" onclick="dsCloseThread()" aria-label="Tutup thread">✕</button></div>
       <div class="ds-thread-list">${list}</div>${dsComposerHtml('thread')}`;
     document.getElementById('dsTa-thread').focus();
   } else panel.querySelector('.ds-thread-list').innerHTML = list;
@@ -2228,7 +2228,7 @@ function dsComposerHtml(w) {
       <div class="ds-compose-row">
         <button type="button" class="ds-attach" onclick="document.getElementById('dsFile-${w}').click()" title="Lampirkan file" aria-label="Lampirkan file">📎</button>
         <input type="file" id="dsFile-${w}" multiple hidden onchange="dsPick('${w}', this)">
-        <textarea id="dsTa-${w}" rows="1" placeholder="${w === 'thread' ? 'Balas di utas…' : 'Tulis pesan…'}" oninput="dsInput('${w}', this)" onkeydown="dsKey(event,'${w}')"></textarea>
+        <textarea id="dsTa-${w}" rows="1" placeholder="${w === 'thread' ? 'Balas di thread…' : 'Tulis pesan…'}" oninput="dsInput('${w}', this)" onkeydown="dsKey(event,'${w}')"></textarea>
         <button type="button" class="ds-send" onclick="dsSend('${w}')" title="Kirim (Enter)" aria-label="Kirim">${SEND_ICON}</button>
       </div>
       <div class="ds-suggest hidden" id="dsSug-${w}"></div>
@@ -2396,7 +2396,7 @@ function dsSummary() {
   const box = document.getElementById('confirmBox');
   const r = dsRoom(ds.cur.id) || ds.cur;
   box.innerHTML = `<div class="cfm-card ds-sum"><h3>✨ Ringkas ${escapeHtml(dsRoomName(r))}</h3>
-      <p>Aurix membaca diskusi (termasuk utas) dan merangkum topik, keputusan, dan tindak lanjut. Hasilnya hanya untuk Anda, kecuali Anda bagikan.</p>
+      <p>Aurix membaca diskusi (termasuk thread) dan merangkum topik, keputusan, dan tindak lanjut. Hasilnya hanya untuk Anda, kecuali Anda bagikan.</p>
       <div class="was-chips ds-sum-range">${[[1, '24 jam'], [7, '7 hari'], [30, '30 hari']].map(([d, l]) => `<button type="button" onclick="dsSummaryRun(${d})">${l}</button>`).join('')}</div>
       <div id="dsSumOut"></div>
       <div class="cfm-actions"><button type="button" class="cfm-no" onclick="dsSummaryClose()">Tutup</button></div></div>`;
