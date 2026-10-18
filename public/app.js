@@ -62,6 +62,7 @@ let dropOpen = false;
 function switchAgent(id) {
   const a = AGENTS.find(x=>x.id===id);
   if(!a) return;
+  showChatView();
   current = a;
   document.getElementById('selImg').src = a.img;
   document.getElementById('selName').textContent = a.name;
@@ -114,6 +115,7 @@ function toggleSockets() {
 }
 
 function navClick(el) {
+  showChatView();
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('on'));
   el.classList.add('on');
 }
@@ -642,5 +644,58 @@ function showToast(msg) {
 }
 
 // INIT APP
+/* ── WHATSAPP AGENT (EPIC-008) ─────────────
+   Menu skeleton: each page is a placeholder until its feature is specified.
+   A page replaces the history panel + chat; any chat navigation brings them back. */
+const WA_PAGES = {
+  connect: { title: 'Koneksikan WA', desc: 'Hubungkan nomor WhatsApp ke agent.', icon: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>' },
+  groups:  { title: 'Pilih Group', desc: 'Pilih grup WhatsApp yang akan diikuti agent.', icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' },
+  inbox:   { title: 'Inbox', desc: 'Pesan WhatsApp yang masuk ke agent.', icon: '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>' },
+  summary: { title: 'Summary Chating', desc: 'Ringkasan percakapan WhatsApp yang dibuat agent.', icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>' }
+};
+let waPage = null;
+
+function toggleWaMenu(force) {
+  const sub = document.getElementById('waSub');
+  const group = document.getElementById('waGroup');
+  const open = force !== undefined ? force : !sub.classList.contains('open');
+  sub.classList.toggle('open', open);
+  group.classList.toggle('open', open);
+  group.setAttribute('aria-expanded', String(open));
+}
+
+function openWaPage(key) {
+  const page = WA_PAGES[key];
+  if (!page) return;
+  waPage = key;
+  closeDrop();
+  toggleWaMenu(true);
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('on', n.dataset.wa === key));
+  document.getElementById('waTitle').textContent = page.title;
+  document.getElementById('waCardTitle').textContent = page.title;
+  document.getElementById('waDesc').textContent = page.desc;
+  document.getElementById('waIcon').innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + page.icon + '</svg>';
+  document.getElementById('socketsPanel').classList.add('hidden');
+  document.querySelector('.chat').classList.add('hidden');
+  document.getElementById('waView').classList.remove('hidden');
+  if (location.hash !== '#wa-' + key) history.replaceState(null, '', '#wa-' + key);
+}
+
+function showChatView() {
+  if (!waPage) return;
+  waPage = null;
+  document.getElementById('waView').classList.add('hidden');
+  document.getElementById('socketsPanel').classList.remove('hidden');
+  document.querySelector('.chat').classList.remove('hidden');
+  document.querySelectorAll('.nav-item[data-wa]').forEach(n => n.classList.remove('on'));
+  if (location.hash.startsWith('#wa-')) history.replaceState(null, '', location.pathname + location.search);
+}
+
+// A reload on #wa-inbox (etc.) reopens that page.
+function openWaFromHash() {
+  const m = location.hash.match(/^#wa-(\w+)$/);
+  if (m && WA_PAGES[m[1]]) openWaPage(m[1]);
+}
+
 renderDrop();renderSb();
-refreshConvs().then(() => switchAgent('dave')).then(importOldHistory);
+refreshConvs().then(() => switchAgent('dave')).then(openWaFromHash).then(importOldHistory);

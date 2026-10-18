@@ -495,3 +495,23 @@ body{font-family:var(--font);background:var(--dark);color:#fff;}
 .flex1{display:flex;flex:1;flex-direction:column;}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#1A1206;color:#E8C96A;font-size:12.5px;font-weight:500;padding:9px 18px;border-radius:20px;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:9999;transition:transform .25s ease,opacity .25s ease;opacity:0;}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+
+/* ── WhatsApp Agent menu + pages (EPIC-008) ── */
+.nav-group .nav-chev{margin-left:auto;display:flex;color:rgba(255,255,255,.3);transition:transform .15s ease;}
+.nav-group.open .nav-chev{transform:rotate(180deg);}
+.nav-group.open{color:rgba(255,255,255,.72);}
+.nav-sub{display:none;margin:2px 0 4px 17px;padding-left:8px;border-left:1px solid rgba(255,255,255,.07);}
+.nav-sub.open{display:block;}
+.nav-item.sub{padding:6px 10px;font-size:12px;gap:8px;}
+.wa-view{flex:1;display:flex;flex-direction:column;background:#fff;overflow:hidden;}
+.wa-head{display:flex;align-items:center;gap:8px;padding:0 18px;height:50px;border-bottom:1px solid #E4E4EE;flex-shrink:0;font-size:13px;}
+.wa-crumb{color:#9898B2;font-weight:500;}
+.wa-sep{color:#C9C9D6;}
+.wa-title{color:#111118;font-weight:700;}
+.wa-body{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;overflow:auto;background:radial-gradient(ellipse at 50% 0%,rgba(201,168,76,.06) 0%,transparent 60%);}
+.wa-card{max-width:420px;width:100%;text-align:center;padding:34px 30px;border:1px solid #E4E4EE;border-radius:16px;background:#fff;box-shadow:0 6px 24px rgba(17,17,24,.05);}
+.wa-icon{width:56px;height:56px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(201,168,76,.12);color:var(--gold);}
+.wa-badge{display:inline-block;margin:16px 0 8px;padding:3px 10px;border-radius:20px;background:rgba(201,168,76,.14);color:#8A6D1F;font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;}
+.wa-card-title{font-family:'Playfair Display',serif;font-size:21px;font-weight:600;color:#111118;margin:0 0 8px;}
+.wa-desc{font-size:13px;line-height:1.6;color:#5A5A72;margin:0 0 6px;}
+.wa-note{font-size:11.5px;color:#9898B2;margin:0;}
