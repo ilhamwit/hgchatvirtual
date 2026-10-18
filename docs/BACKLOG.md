@@ -13,8 +13,8 @@ Semua seed di bawah sudah dipromosikan menjadi task di epic masing-masing.
 ## Phase 0 · Fondasi _(EPIC-000)_
 
 - [x] **P0** (Infra) Git + `.gitignore` + commit awal — T-001
-- [ ] **P0** (Frontend) Pecah HTML 194 KB jadi HTML/CSS/JS/aset — T-002, T-003
-- [ ] **P0** (Infra) `.env.example`, validasi env, instance dev — T-004, T-005
+- [x] **P0** (Frontend) Pecah HTML 194 KB jadi HTML/CSS/JS/aset — T-002, T-003
+- [x] **P0** (Infra) `.env.example`, validasi env, instance dev — T-004, T-005
 
 ## Phase 1 · Multi-user & riwayat server _(EPIC-001, EPIC-002)_
 

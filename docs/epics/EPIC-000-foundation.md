@@ -1,6 +1,6 @@
 # EPIC-000: Fondasi Repo & Struktur
 
-status: ready-for-qa
+status: done
 environment: dev
 phase: 0
 priority: P0
@@ -66,6 +66,7 @@ mengganggu service production. Saat ini semuanya ada di satu file HTML 194 KB
 - 2026-10-18 T-004: `.env.example` lengkap; `server.js` menolak start bila `GATEWAY_TOKEN`/`CHAT_USER`/`CHAT_PASS`/`CHAT_SECRET` kosong atau `CHAT_PORT`/`CHAT_MAX_UPLOAD_BYTES` bukan angka valid, kecuali `CHAT_DEV=1`; bypass login hanya mungkin di dev. 5 unit test `test/config.test.js` (node:test) dijalankan `npm test`. Dicoba dengan env production asli di port cadangan: start OK, `/` & aset → 302 login — done
 - 2026-10-18 T-005: `package.json` (start/dev/test/gates, tanpa dependency), `scripts/dev.sh` (port 8650, `data/dev/`, `--gateway` opsional, menolak port 8643), `README.md` (arsitektur, dev, config, rilis & rollback) — done
 - 2026-10-18 Status → ready-for-qa. QA manusia: (1) bandingkan tampilan dev baru vs lama, (2) `sudo systemctl restart chat-center` lalu cek login + chat di agents.herrygunawan.com, (3) setelah itu hapus `hg-chat-ai-agent.html` & `login.html` di root, lalu → done — ready-for-qa
+- 2026-10-18 QA: user mengonfirmasi tampilan baru = lama (dev :18650 vs :18651). Restart pertama yang sungguhan terjadi 21:41 WIB bersama rilis EPIC-001 (PID 3859494 → 154374; percobaan restart sebelumnya tidak terjadi). Dicek: kode baru aktif (`/login` text/html; charset=utf-8, `/` → 302, tanpa CORS), agents.herrygunawan.com sama. `hg-chat-ai-agent.html` & `login.html` di root dihapus; production tetap 200 — done
 
 ## Dependencies
 
