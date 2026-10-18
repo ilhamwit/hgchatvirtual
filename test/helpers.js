@@ -34,14 +34,14 @@ async function seedDb(file, users = []) {
 // is listening ({ listening, port, stop, out }) or once it exits ({ code, out }).
 // The database always defaults to a temp file: tests run in the production
 // folder, and the default data/chat-center.db there is the real one. Likewise
-// the gateway defaults to a port nothing listens on, never the real OpenClaw.
+// Hermes defaults to a port nothing listens on, never the real agents.
 const NO_GATEWAY = 'http://127.0.0.1:9';
 function runServer(env, { timeoutMs = 5000 } = {}) {
   const home = tempDir();
   const child = spawn(process.execPath, [SERVER], {
     env: {
       PATH: process.env.PATH, HOME: home, CHAT_MEDIA_DIR: home,
-      CHAT_DB_PATH: path.join(home, 'test.db'), CHAT_GATEWAY_URL: NO_GATEWAY, ...env
+      CHAT_DB_PATH: path.join(home, 'test.db'), CHAT_HERMES_URL: NO_GATEWAY, ...env
     }
   });
   let out = '';
@@ -75,7 +75,7 @@ async function startServer(users, extraEnv = {}) {
   const dir = tempDir();
   const dbPath = await seedDb(path.join(dir, 'test.db'), users);
   const port = await freePort();
-  const srv = await runServer({ GATEWAY_TOKEN: 'test-token', CHAT_DB_PATH: dbPath, CHAT_PORT: String(port), ...extraEnv });
+  const srv = await runServer({ HERMES_API_KEY: 'test-key', CHAT_DB_PATH: dbPath, CHAT_PORT: String(port), ...extraEnv });
   if (!srv.listening) throw new Error('server did not start:\n' + srv.out);
   const base = `http://127.0.0.1:${port}`;
   return {
@@ -105,7 +105,7 @@ async function startServer(users, extraEnv = {}) {
   };
 }
 
-// A stand-in for the OpenClaw gateway. `respond(body, req)` returns
+// A stand-in for the Hermes API server. `respond(body, req)` returns
 // { status, json, delayMs } (default: echo). Every request is recorded, and
 // `aborted` counts requests the caller cancelled mid-flight.
 function startFakeGateway(respond) {

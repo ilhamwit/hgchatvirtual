@@ -20,32 +20,32 @@ async function start(env) {
   return r;
 }
 
-test('refuses to start without GATEWAY_TOKEN and names it', async () => {
+test('refuses to start without HERMES_API_KEY and names it', async () => {
   const db = await dbWith([ADMIN]);
   const r = await start({ CHAT_DB_PATH: db.file });
   db.cleanup();
   assert.strictEqual(r.code, 1);
-  assert.match(r.out, /missing required env GATEWAY_TOKEN/);
+  assert.match(r.out, /missing required env HERMES_API_KEY/);
 });
 
 test('refuses to start in production with no active users', async () => {
   const db = await dbWith([]);
-  const r = await start({ GATEWAY_TOKEN: 't', CHAT_DB_PATH: db.file });
+  const r = await start({ HERMES_API_KEY: 't', CHAT_DB_PATH: db.file });
   db.cleanup();
   assert.strictEqual(r.code, 1);
   assert.match(r.out, /no active users — create one with: node scripts\/users\.js add/);
 });
 
 test('rejects a non-numeric port', async () => {
-  const r = await runServer({ GATEWAY_TOKEN: 't', CHAT_PORT: 'eighty' });
+  const r = await runServer({ HERMES_API_KEY: 't', CHAT_PORT: 'eighty' });
   await r.stop();
   assert.strictEqual(r.code, 1);
   assert.match(r.out, /CHAT_PORT must be an integer/);
 });
 
-test('starts with a gateway token and at least one user', async () => {
+test('starts with a Hermes key and at least one user', async () => {
   const db = await dbWith([ADMIN]);
-  const r = await start({ GATEWAY_TOKEN: 't', CHAT_DB_PATH: db.file });
+  const r = await start({ HERMES_API_KEY: 't', CHAT_DB_PATH: db.file });
   db.cleanup();
   assert.ok(r.listening, r.out);
 });

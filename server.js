@@ -1,10 +1,10 @@
 // Single local server for Chat Center: serves the static page and the /api/
-// the page uses, and talks to the OpenClaw gateway on the users' behalf. One
+// the page uses, and talks to the Hermes agents on the users' behalf. One
 // port, one origin — the target behind the agents.herrygunawan.com tunnel.
 //
 // Security model:
-//   1. The gateway token never ships to the browser. It is read from the
-//      environment (GATEWAY_TOKEN) and injected on the proxy hop only.
+//   1. The Hermes API key never ships to the browser. It is read from the
+//      environment (HERMES_API_KEY) and used only by lib/gateway.js.
 //   2. Every team member logs in with their own account (SQLite, scrypt);
 //      the browser holds a random session token in an HttpOnly cookie.
 // Env is supplied by systemd via /home/hg/.config/chat-center.env
@@ -18,10 +18,10 @@ const auth = require('./lib/auth');
 const { createGateway, DEFAULT_URL: DEFAULT_GATEWAY_URL } = require('./lib/gateway');
 const { createApi } = require('./lib/api');
 
-// Fail fast on bad config. Production (systemd) must provide the gateway
-// token; CHAT_DEV=1 is the explicit opt-out for local UI work. See .env.example.
+// Fail fast on bad config. Production (systemd) must provide the Hermes
+// API key; CHAT_DEV=1 is the explicit opt-out for local UI work. See .env.example.
 const DEV = process.env.CHAT_DEV === '1';
-const REQUIRED_ENV = ['GATEWAY_TOKEN'];
+const REQUIRED_ENV = ['HERMES_API_KEY'];
 
 function configError(msg) {
   console.error('Chat Center config error: ' + msg);
@@ -43,8 +43,9 @@ if (!DEV) {
   }
 }
 
-const GATEWAY = process.env.CHAT_GATEWAY_URL || DEFAULT_GATEWAY_URL;
-// OpenClaw agent ids the UI may talk to (default: the five team agents).
+const GATEWAY = process.env.CHAT_HERMES_URL || DEFAULT_GATEWAY_URL;
+// Hermes profile names the UI may talk to (default: the five team agents).
+// Each must have API_SERVER_KEY = HERMES_API_KEY in its profile .env.
 const AGENTS = (process.env.CHAT_AGENTS || 'dave,jaden,joel,dylan,nana')
   .split(',').map((s) => s.trim()).filter(Boolean);
 if (!AGENTS.every((a) => /^[a-z0-9_-]+$/.test(a))) configError('CHAT_AGENTS must be a comma-separated list of agent ids');
@@ -54,7 +55,7 @@ const ROOT = __dirname;
 // code, docs, .git, .agentic) stays private.
 const PUBLIC = path.join(ROOT, 'public');
 
-const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || '';
+const HERMES_API_KEY = process.env.HERMES_API_KEY || '';
 const COOKIE_NAME = 'hgchat_session';
 const COOKIE_MAX_AGE = Math.floor(auth.SESSION_TTL_MS / 1000);
 
@@ -80,8 +81,8 @@ const MIME = {
   '.svg': 'image/svg+xml', '.webp': 'image/webp', '.ico': 'image/x-icon'
 };
 
-// Attachments follow OpenClaw's own inbound-media convention (the same place the
-// Telegram channel drops files): <slug>---<uuid>.<ext>. The agents read them
+// Attachments follow OpenClaw's inbound-media convention (where its Telegram
+// channel dropped files; kept so older attachment paths stay valid): <slug>---<uuid>.<ext>. The agents read them
 // with their normal filesystem tools, so an absolute path is the whole handoff.
 // Nothing here is ever served back over HTTP — the directory sits outside ROOT.
 const MEDIA_DIR = process.env.CHAT_MEDIA_DIR ||
@@ -95,7 +96,7 @@ const ALLOWED_EXT = new Set([
 
 const api = createApi({
   db,
-  gateway: createGateway({ url: GATEWAY, token: GATEWAY_TOKEN }),
+  gateway: createGateway({ url: GATEWAY, key: HERMES_API_KEY }),
   agents: AGENTS,
   mediaDir: MEDIA_DIR
 });
@@ -290,7 +291,7 @@ const server = http.createServer((req, res) => {
   }
 
   // There is no gateway proxy: the browser only reaches the routes in
-  // lib/api.js, and only lib/gateway.js talks to OpenClaw.
+  // lib/api.js, and only lib/gateway.js talks to Hermes.
   if (api.handle(req, res, user, new URL(req.url, 'http://local'))) return;
 
   // '/hg-chat-ai-agent.html' is the pre-split page name; keep old links working.
@@ -311,6 +312,6 @@ const server = http.createServer((req, res) => {
     res.end(data);
   });
 }).listen(PORT, '127.0.0.1', () => {
-  console.log(`Chat Center server running at http://127.0.0.1:${PORT} (gateway ${GATEWAY}, agents ${AGENTS.join(', ')})`);
-  if (DEV) console.log('CHAT_DEV=1: development mode' + (GATEWAY_TOKEN ? '' : ' (no gateway token)'));
+  console.log(`Chat Center server running at http://127.0.0.1:${PORT} (Hermes ${GATEWAY}, agents ${AGENTS.join(', ')})`);
+  if (DEV) console.log('CHAT_DEV=1: development mode' + (HERMES_API_KEY ? '' : ' (no Hermes key)'));
 });

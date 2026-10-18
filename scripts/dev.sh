@@ -5,7 +5,7 @@
 #
 #   npm run dev:users -- add me  # create a dev account (once)
 #   npm run dev                  # no gateway (UI work)
-#   npm run dev -- --gateway     # also talk to the real OpenClaw agents
+#   npm run dev -- --gateway     # also talk to the real Hermes agents
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -27,11 +27,11 @@ fi
 
 if [ "${1:-}" = "--gateway" ]; then
   envfile="${CHAT_ENV_FILE:-$HOME/.config/chat-center.env}"
-  # Read only the gateway token, without echoing it. Dev chats create real
-  # OpenClaw sessions, so the agents will remember them.
-  GATEWAY_TOKEN="$(grep -m1 '^GATEWAY_TOKEN=' "$envfile" | cut -d= -f2-)" || true
-  [ -n "${GATEWAY_TOKEN:-}" ] || { echo "No GATEWAY_TOKEN in $envfile" >&2; exit 1; }
-  export GATEWAY_TOKEN
+  # Read only the Hermes key, without echoing it. Dev chats create real
+  # Hermes sessions, so the agents will remember them.
+  HERMES_API_KEY="$(grep -m1 '^HERMES_API_KEY=' "$envfile" | cut -d= -f2-)" || true
+  [ -n "${HERMES_API_KEY:-}" ] || { echo "No HERMES_API_KEY in $envfile" >&2; exit 1; }
+  export HERMES_API_KEY
 fi
 
 echo "Dev: http://127.0.0.1:$CHAT_PORT  (data: data/dev/)"

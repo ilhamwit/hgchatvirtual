@@ -59,7 +59,7 @@ di server, API chat server-side, sesi OpenClaw per percakapan.
 **Later (P2):** agent untuk kerja tim — integrasi Backstage, ringkasan harian,
 percakapan bersama (EPIC-006).
 
-**Out:** akses publik/klien, aplikasi mobile native, mengganti OpenClaw.
+**Out:** akses publik/klien, aplikasi mobile native.
 
 ## Delivery Milestones
 
@@ -97,7 +97,7 @@ percakapan bersama (EPIC-006).
 
 ## Appendix B — Domain Rules
 
-- Satu percakapan = satu user + satu agent + satu sesi OpenClaw (`hgchat:<conversationId>`).
+- Satu percakapan = satu user + satu agent + satu sesi Hermes (`X-Hermes-Session-Id: hgchat-<conversationId>`).
 - User hanya bisa membaca percakapan, pesan, dan lampiran miliknya (kecuali percakapan `shared`, EPIC-006).
 - Gateway hanya dipanggil oleh server; klien tidak pernah memegang token gateway.
 
@@ -107,5 +107,5 @@ percakapan bersama (EPIC-006).
 - Penyimpanan: SQLite via `node:sqlite` (bawaan); hashing via `node:crypto` (scrypt).
 - Test: `node:test`. Gate: `scripts/{qa,test,security-check}.sh`.
 - Frontend: HTML/CSS/JS statis, font Inter + Playfair Display, palet emas `#C9A84C`.
-- Backend agent: OpenClaw gateway (OpenAI-compatible) di 127.0.0.1:18789.
+- Backend agent: Hermes Agent API server (OpenAI-compatible) di 127.0.0.1:8642, satu profil per agent (sejak EPIC-007; sebelumnya OpenClaw gateway di :18789).
 - Hosting: systemd `chat-center.service` + Cloudflare Tunnel.

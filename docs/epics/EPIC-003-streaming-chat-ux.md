@@ -38,7 +38,7 @@ Prompt/Agent, pemilih model, mikrofon, dan pencarian hanya hiasan.
 ### Bersih-bersih UI
 
 - [ ] **T-022** Buang atau sembunyikan elemen hiasan (menu sidebar, tab Prompt/Agent, model selector, mic, badge counter palsu) sampai ada fitur nyata di baliknya.
-- [ ] **T-023** Selaraskan nama/role/sapaan agent dengan identitas di workspace OpenClaw (`IDENTITY.md`); sumber data dari `GET /api/agents`, bukan hardcode. Lengkapi identitas Nana.
+- [ ] **T-023** Selaraskan nama/role/sapaan agent dengan identitas di profil Hermes (SOUL/identitas profil); sumber data dari `GET /api/agents`, bukan hardcode. Lengkapi identitas Nana.
 
 ## Acceptance Criteria
 

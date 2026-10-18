@@ -8,21 +8,26 @@ it stops being true. Durable decisions also go in the owning epic's Automation L
 - `chat-center.service` (systemd, user `hg`) runs `node server.js` from **this
   folder** on 127.0.0.1:8643; Cloudflare Tunnel publishes it as
   agents.herrygunawan.com. Env: `~/.config/chat-center.env`.
-- `server.js` serves the page and proxies to the OpenClaw gateway at
-  127.0.0.1:18789 (OpenAI-compatible `/v1/chat/completions`, agent targets
-  `openclaw/<agentId>`). Agents: dave, jaden, joel, dylan, nana (+ main/Aurix).
-- OpenClaw derives the session from the request's `user` field. Since EPIC-002
-  the server sends `hgchat:<conversationId>`: one OpenClaw session per
-  conversation (key `agent:<id>:openai-user:hgchat:<uuid>`). Sessions named
-  `chatcenter:<agentId>` are the old shared ones from before EPIC-002.
-- The browser never reaches the gateway: `lib/api.js` (/api/*) stores messages
-  in SQLite and `lib/gateway.js` calls OpenClaw with the token. Each message to
+- Agents run in **Hermes Agent** (since EPIC-007; they were OpenClaw agents
+  before). `hermes-gateway` is a *user* systemd service (`systemctl --user`),
+  one process serving profiles default, aurix, dave, jaden, joel, dylan, nana.
+  Its API server listens on 127.0.0.1:8642 (enabled on the default profile
+  only); agent X is `POST /p/X/v1/chat/completions` with the profile's
+  `API_SERVER_KEY`. The five agent profiles share one key, which is
+  `HERMES_API_KEY` in `~/.config/chat-center.env`. Pre-change backup:
+  `~/.hermes/backups/pre-epic007-20261018-221343`.
+- One Hermes session per conversation via header
+  `X-Hermes-Session-Id: hgchat-<conversationId>`; Hermes keeps the transcript,
+  so each turn sends only the new message. Conversations from before EPIC-007
+  had OpenClaw sessions (`user: hgchat:<id>`); their context does not carry over.
+- The browser never reaches Hermes: `lib/api.js` (/api/*) stores messages in
+  SQLite and `lib/gateway.js` calls Hermes with the key. Each message to
   an agent starts with `[Dari: <Name> (@user) via HG Chat]`.
 - Attachments are written to `~/.openclaw/media/inbound` and handed to the agent
   as an absolute path.
 - Node v26.8.1 on the host: `node:sqlite` and `node:test` are available.
 - Only `public/` is served over HTTP. `server.js` refuses to start without
-  `GATEWAY_TOKEN` or with zero active users, unless `CHAT_DEV=1`.
+  `HERMES_API_KEY` or with zero active users, unless `CHAT_DEV=1`.
 - Accounts (EPIC-001): SQLite `data/chat-center.db` via `lib/db.js` (migrations
   in `PRAGMA user_version`); `lib/auth.js` = scrypt, sessions stored as SHA-256
   of the cookie token (`hgchat_session`), 5 fails/15 min limiter (in memory).

@@ -19,7 +19,7 @@ hanya baris start di journald.
 ## User Stories
 
 - **US-OPS-1** — Sebagai admin, saya ingin DB di-backup otomatis, supaya riwayat tim tidak hilang saat disk rusak atau salah hapus.
-- **US-OPS-2** — Sebagai admin, saya ingin tahu kalau Chat Center atau gateway OpenClaw mati.
+- **US-OPS-2** — Sebagai admin, saya ingin tahu kalau Chat Center atau Hermes mati.
 
 ## Tasks
 
@@ -29,7 +29,7 @@ hanya baris start di journald.
 
 ### Health & monitoring
 
-- [ ] **T-028** `GET /healthz` (tanpa auth) yang memeriksa DB dan `GET /health` gateway OpenClaw; dipakai untuk uptime check.
+- [ ] **T-028** `GET /healthz` (tanpa auth) yang memeriksa DB dan `GET /health` Hermes (127.0.0.1:8642); dipakai untuk uptime check.
 
 ### Logging & audit
 

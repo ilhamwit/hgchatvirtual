@@ -1,5 +1,5 @@
-// EPIC-002 end to end: server-side history, one OpenClaw session per
-// conversation, ownership, and no gateway proxy — against a fake gateway.
+// EPIC-002/007 end to end: server-side history, one Hermes session per
+// conversation, ownership, and no gateway proxy — against a fake Hermes.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -16,7 +16,7 @@ let mode = { status: 200 };        // what the fake gateway does next
 test.before(async () => {
   gw = await startFakeGateway(() => mode);
   media = tempDir();
-  srv = await startServer([ILHAM, IRFAN], { CHAT_GATEWAY_URL: gw.url, CHAT_MEDIA_DIR: media });
+  srv = await startServer([ILHAM, IRFAN], { CHAT_HERMES_URL: gw.url, CHAT_MEDIA_DIR: media });
   a = (await srv.login('ilham', ILHAM.password, { 'CF-Connecting-IP': '203.0.113.1' })).cookie;
   b = (await srv.login('irfan', IRFAN.password, { 'CF-Connecting-IP': '203.0.113.2' })).cookie;
 });
@@ -39,7 +39,7 @@ test('agents list and conversation creation', async () => {
   assert.strictEqual(c.agentId, 'joel');
 });
 
-test('a turn stores both messages and reaches the gateway correctly', async () => {
+test('a turn stores both messages and reaches Hermes correctly', async () => {
   const c = await newConv(a);
   const before = gw.calls.length;
   const r = await send(a, c.id, 'Halo Dave');
@@ -48,11 +48,13 @@ test('a turn stores both messages and reaches the gateway correctly', async () =
   assert.strictEqual(r.body.reply.role, 'assistant');
 
   const call = gw.calls[before];
-  assert.strictEqual(call.path, '/v1/chat/completions');
-  assert.strictEqual(call.body.model, 'openclaw/dave');
-  assert.strictEqual(call.body.user, 'hgchat:' + c.id, 'one OpenClaw session per conversation');
-  assert.strictEqual(call.headers.authorization, 'Bearer test-token');
-  assert.strictEqual(call.headers.cookie, undefined, 'the session cookie never reaches the gateway');
+  assert.strictEqual(call.path, '/p/dave/v1/chat/completions', 'the agent is a Hermes profile');
+  assert.strictEqual(call.body.model, 'dave');
+  assert.strictEqual(call.headers['x-hermes-session-id'], 'hgchat-' + c.id, 'one Hermes session per conversation');
+  assert.strictEqual(call.body.messages.length, 1, 'Hermes holds the transcript; only the new message is sent');
+  assert.strictEqual(call.body.user, undefined);
+  assert.strictEqual(call.headers.authorization, 'Bearer test-key');
+  assert.strictEqual(call.headers.cookie, undefined, 'the session cookie never reaches Hermes');
   assert.match(call.body.messages[0].content, /^\[Dari: Ilham \(@ilham\) via HG Chat\]\n\nHalo Dave$/, 'sender attribution');
 
   const list = await srv.json(a, 'GET', `/api/conversations/${c.id}/messages`);
@@ -61,13 +63,13 @@ test('a turn stores both messages and reaches the gateway correctly', async () =
   assert.strictEqual(conv.title, 'Halo Dave', 'first message names the conversation');
 });
 
-test('two users on the same agent get separate OpenClaw sessions', async () => {
+test('two users on the same agent get separate Hermes sessions', async () => {
   const ca = await newConv(a, 'nana');
   const cb = await newConv(b, 'nana');
   const before = gw.calls.length;
   await send(a, ca.id, 'dari ilham');
   await send(b, cb.id, 'dari irfan');
-  const [u1, u2] = gw.calls.slice(before).map((c) => c.body.user);
+  const [u1, u2] = gw.calls.slice(before).map((c) => c.headers['x-hermes-session-id']);
   assert.notStrictEqual(u1, u2);
   assert.match(gw.calls.at(-1).body.messages[0].content, /^\[Dari: Irfan \(@irfan\)/);
 });
@@ -102,7 +104,7 @@ test('gateway down: the question is kept, the error is stored, retry recovers', 
   mode = { status: 500, json: { error: { message: 'boom' } } };
   const r = await send(a, c.id, 'tolong');
   assert.strictEqual(r.body.reply.role, 'error');
-  assert.match(r.body.reply.content, /Gateway error 500 — boom/);
+  assert.match(r.body.reply.content, /Hermes error 500 — boom/);
 
   mode = { status: 200 };
   const retry = await srv.json(a, 'POST', `/api/conversations/${c.id}/retry`);
@@ -202,4 +204,29 @@ test('input limits', async () => {
   assert.strictEqual((await send(a, c.id, 'x'.repeat(20001))).status, 400, 'too long');
   assert.strictEqual((await srv.json(a, 'DELETE', `/api/conversations/${c.id}`)).status, 405);
   assert.strictEqual((await srv.json(a, 'GET', '/api/nope')).status, 404);
+});
+
+test('Hermes finish_reason cancelled or error is stored as an error, not a reply', async () => {
+  const c = await newConv(a, 'jaden');
+  mode = { json: { choices: [{ message: { role: 'assistant', content: '' }, finish_reason: 'cancelled' }] } };
+  let r = await send(a, c.id, 'satu');
+  assert.strictEqual(r.body.reply.role, 'error');
+  assert.strictEqual(r.body.reply.content, 'Dibatalkan oleh Hermes.');
+  mode = { json: { choices: [{ message: { role: 'assistant', content: 'tool crashed' }, finish_reason: 'error' }] } };
+  r = await srv.json(a, 'POST', `/api/conversations/${c.id}/retry`);
+  assert.strictEqual(r.body.reply.role, 'error');
+  assert.match(r.body.reply.content, /Hermes gagal menjalankan giliran ini: tool crashed/);
+  mode = { status: 401, json: { error: { message: 'invalid API key' } } };
+  r = await srv.json(a, 'POST', `/api/conversations/${c.id}/retry`);
+  assert.match(r.body.reply.content, /^Hermes error 401 — invalid API key$/);
+});
+
+test('Hermes unreachable is a stored, retryable error', async () => {
+  const off = await startServer([{ username: 'solo', password: 'solo-password-1' }]);
+  const cookie = (await off.login('solo', 'solo-password-1')).cookie;
+  const c = (await off.json(cookie, 'POST', '/api/conversations', { agentId: 'dave' })).body.conversation;
+  const r = await off.json(cookie, 'POST', `/api/conversations/${c.id}/messages`, { text: 'halo' });
+  await off.stop();
+  assert.strictEqual(r.body.reply.role, 'error');
+  assert.match(r.body.reply.content, /^Hermes tidak bisa dihubungi \(.+\)\.$/);
 });

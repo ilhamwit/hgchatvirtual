@@ -22,7 +22,7 @@ db="$media/smoke.db"
 pw="smoke-$(node -e 'console.log(require("crypto").randomBytes(12).toString("hex"))')"
 printf '%s\n' "$pw" | CHAT_DB_PATH="$db" node scripts/users.js add smoke >/dev/null
 # Production mode with a fake gateway token, so nothing real is reachable.
-env -i PATH="$PATH" HOME="$media" GATEWAY_TOKEN=smoke-not-a-token CHAT_DB_PATH="$db" \
+env -i PATH="$PATH" HOME="$media" HERMES_API_KEY=smoke-not-a-key CHAT_DB_PATH="$db" \
   CHAT_PORT="$port" CHAT_MEDIA_DIR="$media" node server.js >"$log" 2>&1 &
 pid=$!
 trap 'kill $pid 2>/dev/null || true; rm -rf "$media" "$log"' EXIT

@@ -43,8 +43,8 @@ conventions:
     and test on a separate port. Vanilla Node (v26), no framework, no build step;
     prefer built-in modules (node:sqlite, node:crypto, node:test) over new
     dependencies. Secrets live only in ~/.config/chat-center.env. User-facing copy
-    is Bahasa Indonesia. Agents (dave/jaden/joel/dylan/nana) are OpenClaw agents
-    behind the gateway at 127.0.0.1:18789.
+    is Bahasa Indonesia. Agents (dave/jaden/joel/dylan/nana) are Hermes profiles
+    behind the Hermes API server at 127.0.0.1:8642 (/p/<profile>/).
 
 # Multi-user (EPIC-001/002) but not multi-tenant. Once EPIC-002 lands, consider
 # [user_id] so review/security agents enforce per-user ownership checks.

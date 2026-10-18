@@ -32,11 +32,11 @@ adalah usulan awal.
 
 ### Integrasi Backstage
 
-- [ ] **T-032** Tool/skill OpenClaw untuk Backstage (list/create/update task) dengan akun layanan berizin terbatas; agent bertindak atas nama user yang meminta.
+- [ ] **T-032** Tool/skill Hermes untuk Backstage (list/create/update task) dengan akun layanan berizin terbatas; agent bertindak atas nama user yang meminta.
 
 ### Ringkasan & ruang bersama
 
-- [ ] **T-033** Ringkasan harian per agent lewat heartbeat/cron OpenClaw, dikirim ke percakapan tim.
+- [ ] **T-033** Ringkasan harian per agent lewat cron Hermes, dikirim ke percakapan tim.
 - [ ] **T-034** Percakapan bersama (`shared`): terlihat semua anggota, pengirim tiap pesan ditampilkan.
 
 ## Acceptance Criteria

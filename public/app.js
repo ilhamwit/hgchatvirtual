@@ -1,5 +1,5 @@
 // ─── Server API ───────────────
-// The browser never talks to the OpenClaw gateway. It calls /api/..., and the
+// The browser never talks to the agents' backend (Hermes). It calls /api/..., and the
 // server stores every message and asks the agent on the user's behalf.
 async function api(method, url, body) {
   const res = await fetch(url, {
@@ -242,7 +242,7 @@ function formatMsg(text) {
 }
 
 // ─── Conversations (stored on the server, per user) ───
-// One conversation = one agent + one OpenClaw session. Each agent shows one
+// One conversation = one agent + one Hermes session. Each agent shows one
 // conversation at a time; "Chat baru" starts a fresh one.
 let convs = [];             // the user's non-archived conversations, newest first
 const activeConv = {};      // agentId -> conversation id on screen (null = new chat)
@@ -404,7 +404,7 @@ function removeTyping() { const el=document.getElementById('typRow'); if(el) el.
 
 /* ── ATTACHMENTS ──────────────────────────────
    Files are uploaded to /upload the moment they are picked; the server drops
-   them in OpenClaw's inbound-media folder and hands back an absolute path.
+   them in the agents' inbound-media folder and hands back an absolute path.
    On send, those paths are prefixed to the message so the agent can open them
    with its own filesystem tools — the same handoff the Telegram channel uses. */
 const MAX_ATTACH_BYTES = 10 * 1024 * 1024;
