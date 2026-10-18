@@ -1,6 +1,6 @@
 # EPIC-001: Akun per Orang & Sesi Login
 
-status: ready-for-qa
+status: done
 environment: dev
 phase: 1
 priority: P0
@@ -72,6 +72,7 @@ terpisah per orang. Pembatasan per agent bisa ditambah lewat role nanti.
 - 2026-10-18 Test: 22 test node:test (8 unit auth, 5 config, 9 end-to-end atas server.js asli: dua user bersamaan, cookie flags, 401/429, logout, disable/revoke via CLI langsung berlaku, tanpa CORS/PIN/Basic). `test.sh` smoke kini membuat akun sekali pakai dan login. `npm run gates` PASS (2 warning: PIN di file root lama yang dihapus setelah restart; proxy /v1/* → EPIC-002) — done
 - 2026-10-18 Status → ready-for-qa. QA/rilis manusia: merge `epic-001` ke `main`, buat akun tim dengan `node scripts/users.js add …` SEBELUM restart (server menolak start tanpa user), restart, uji login dua orang + chat + Keluar di agents.herrygunawan.com — ready-for-qa
 - 2026-10-18 Rilis: `epic-001` di-fast-forward ke `main` (22d43e5); user membuat akun ilham (admin), irfan, cahyo sebagai `hg`; restart 21:41 WIB (PID 154374, NRestarts=0). Dicek dari server: login salah → 401, `/api/me` anonim → 401, Basic auth dengan kredensial bersama lama → 401, tanpa header CORS, DB `data/chat-center.db` 600 milik hg (dir `data/` → 700). Belum: login sungguhan dari browser (semua akun 0 sesi) — ready-for-qa
+- 2026-10-18 QA: user login, chat, dan Keluar dari browser di agents.herrygunawan.com — berhasil — done
 
 ## Dependencies
 
