@@ -32,10 +32,12 @@ async function seedDb(file, users = []) {
 
 // Runs server.js with exactly `env` (plus PATH/HOME/media dir). Resolves once it
 // is listening ({ listening, port, stop, out }) or once it exits ({ code, out }).
+// The database always defaults to a temp file: tests run in the production
+// folder, and the default data/chat-center.db there is the real one.
 function runServer(env, { timeoutMs = 5000 } = {}) {
   const home = tempDir();
   const child = spawn(process.execPath, [SERVER], {
-    env: { PATH: process.env.PATH, HOME: home, CHAT_MEDIA_DIR: home, ...env }
+    env: { PATH: process.env.PATH, HOME: home, CHAT_MEDIA_DIR: home, CHAT_DB_PATH: path.join(home, 'test.db'), ...env }
   });
   let out = '';
   let done = false;
