@@ -21,7 +21,7 @@ test.before(async () => { srv = await startServer([ILHAM, IRFAN, CAHYO]); });
 test.after(async () => { await srv.stop(); });
 
 test('anonymous requests: pages redirect to /login, APIs return 401', async () => {
-  for (const p of ['/', '/app.js', '/assets/hg-logo.png']) {
+  for (const p of ['/', '/app.js', '/assets/agents/dave.jpg']) {
     const r = await srv.request(p);
     assert.strictEqual(r.status, 302, p);
     assert.strictEqual(r.headers.get('location'), '/login');

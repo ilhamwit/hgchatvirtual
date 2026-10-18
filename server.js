@@ -184,22 +184,41 @@ function getCookie(req, name) {
   return null;
 }
 
+// Behind the Cloudflare tunnel every connection comes from cloudflared on
+// loopback, so the visitor's details are in Cloudflare's headers. Only trust
+// them from loopback; anything else is a direct connection.
+function viaProxy(req) {
+  const remote = req.socket.remoteAddress || '';
+  return remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+}
+
+function clientIp(req) {
+  return (viaProxy(req) && req.headers['cf-connecting-ip']) || req.socket.remoteAddress || '';
+}
+
+// The scheme the visitor used ('http' / 'https'), or null for a direct local
+// connection with no proxy headers.
+function visitorScheme(req) {
+  if (!viaProxy(req)) return null;
+  try {
+    const scheme = JSON.parse(req.headers['cf-visitor'] || '{}').scheme;
+    if (scheme === 'http' || scheme === 'https') return scheme;
+  } catch (e) { /* fall through */ }
+  const proto = (req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  return proto === 'http' || proto === 'https' ? proto : null;
+}
+
 function setSessionCookie(req, res, token, maxAge = COOKIE_MAX_AGE) {
-  const secure = (req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+  const secure = visitorScheme(req) === 'https';
   res.setHeader(
     'Set-Cookie',
     `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}` + (secure ? '; Secure' : '')
   );
 }
 
-// Behind the Cloudflare tunnel every connection comes from cloudflared on
-// loopback, so the real client is in CF-Connecting-IP. Only trust that header
-// from loopback; anything else is a direct connection.
-function clientIp(req) {
-  const remote = req.socket.remoteAddress || '';
-  const loopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
-  return (loopback && req.headers['cf-connecting-ip']) || remote;
-}
+// Anonymous visitors may load these (the login page shows the logo).
+const PUBLIC_PATHS = new Set(['/assets/hg-logo.png']);
+const HOST_RE = /^[A-Za-z0-9.-]+(:\d{1,5})?$/;
 
 function readBody(req, limit, cb) {
   let body = '';
@@ -251,6 +270,16 @@ function handleLogout(req, res) {
 // No CORS headers: the page and its API share one origin, and no other site
 // should be able to call this server from a browser.
 const server = http.createServer((req, res) => {
+  // Public visitors on plain http go to https first. Mixing the two breaks
+  // login: a browser that once got the Secure session cookie over https
+  // refuses to replace it from an http page, and never sends it over http.
+  if (visitorScheme(req) === 'http' && HOST_RE.test(req.headers.host || '')) {
+    req.resume();
+    res.writeHead(308, { Location: `https://${req.headers.host}${req.url}`, 'Cache-Control': 'no-store' });
+    res.end();
+    return;
+  }
+
   const urlNoQuery = req.url.split('?')[0];
   const user = auth.getSessionUser(db, getCookie(req, COOKIE_NAME));
 
@@ -267,7 +296,7 @@ const server = http.createServer((req, res) => {
   if (urlNoQuery === '/login' && req.method === 'POST') { handleLogin(req, res); return; }
   if (urlNoQuery === '/logout' && req.method === 'POST') { handleLogout(req, res); return; }
 
-  if (!user) {
+  if (!user && !PUBLIC_PATHS.has(urlNoQuery)) {
     // API-ish routes get a JSON 401 so fetch() can report it; page loads get
     // bounced to the login screen.
     if (urlNoQuery.startsWith('/v1/') || urlNoQuery.startsWith('/api/') || urlNoQuery === '/upload') {
