@@ -53,6 +53,9 @@ check() { # path expected-status must-contain
 check / 200 '<html'
 check /hg-chat-ai-agent.html 200 '<html'
 check /api/me 200 '"username":"smoke"'
+check /api/agents 200 '"dave"'
+check /api/conversations 200 '"conversations"'
+check /v1/models 404 'Not found'
 
 status() { curl -sS -b "$jar" --path-as-is -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port$1"; }
 

@@ -1,6 +1,6 @@
-// Single local server for Chat Center: serves the static HTML and proxies
-// /v1/* to the Openclaw Gateway. One port, one origin — used both locally
-// and as the target behind the agents.herrygunawan.com tunnel.
+// Single local server for Chat Center: serves the static page and the /api/
+// the page uses, and talks to the OpenClaw gateway on the users' behalf. One
+// port, one origin — the target behind the agents.herrygunawan.com tunnel.
 //
 // Security model:
 //   1. The gateway token never ships to the browser. It is read from the
@@ -15,6 +15,8 @@ const os = require('os');
 const crypto = require('crypto');
 const { openDb } = require('./lib/db');
 const auth = require('./lib/auth');
+const { createGateway, DEFAULT_URL: DEFAULT_GATEWAY_URL } = require('./lib/gateway');
+const { createApi } = require('./lib/api');
 
 // Fail fast on bad config. Production (systemd) must provide the gateway
 // token; CHAT_DEV=1 is the explicit opt-out for local UI work. See .env.example.
@@ -41,7 +43,11 @@ if (!DEV) {
   }
 }
 
-const GATEWAY = 'http://127.0.0.1:18789';
+const GATEWAY = process.env.CHAT_GATEWAY_URL || DEFAULT_GATEWAY_URL;
+// OpenClaw agent ids the UI may talk to (default: the five team agents).
+const AGENTS = (process.env.CHAT_AGENTS || 'dave,jaden,joel,dylan,nana')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+if (!AGENTS.every((a) => /^[a-z0-9_-]+$/.test(a))) configError('CHAT_AGENTS must be a comma-separated list of agent ids');
 const PORT = intEnv('CHAT_PORT', 8643, 1, 65535);
 const ROOT = __dirname;
 // Only this directory is reachable over HTTP. Everything else in ROOT (server
@@ -86,6 +92,13 @@ const ALLOWED_EXT = new Set([
   'pdf','doc','docx','xls','xlsx','ppt','pptx','rtf','odt','ods',
   'png','jpg','jpeg','gif','webp','bmp','heic'
 ]);
+
+const api = createApi({
+  db,
+  gateway: createGateway({ url: GATEWAY, token: GATEWAY_TOKEN }),
+  agents: AGENTS,
+  mediaDir: MEDIA_DIR
+});
 
 // Keep only a basename, and only characters that are safe in a shell argument
 // and in a path — the agent will be handed this string.
@@ -276,23 +289,9 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (req.url.startsWith('/v1/')) {
-    const target = new URL(req.url, GATEWAY);
-    const headers = { ...req.headers, host: target.host };
-    delete headers.cookie; // the user's session token stays on this hop
-    // Never trust the client's Authorization: replace it with the server-side token.
-    if (GATEWAY_TOKEN) headers.authorization = 'Bearer ' + GATEWAY_TOKEN;
-    const upstream = http.request(target, { method: req.method, headers }, (upstreamRes) => {
-      res.writeHead(upstreamRes.statusCode, upstreamRes.headers);
-      upstreamRes.pipe(res);
-    });
-    upstream.on('error', (err) => {
-      res.writeHead(502, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Proxy error: ' + err.message }));
-    });
-    req.pipe(upstream);
-    return;
-  }
+  // There is no gateway proxy: the browser only reaches the routes in
+  // lib/api.js, and only lib/gateway.js talks to OpenClaw.
+  if (api.handle(req, res, user, new URL(req.url, 'http://local'))) return;
 
   // '/hg-chat-ai-agent.html' is the pre-split page name; keep old links working.
   let urlPath = urlNoQuery === '/' || urlNoQuery === '/hg-chat-ai-agent.html' ? '/index.html' : urlNoQuery;
@@ -312,6 +311,6 @@ const server = http.createServer((req, res) => {
     res.end(data);
   });
 }).listen(PORT, '127.0.0.1', () => {
-  console.log(`Chat Center server running at http://127.0.0.1:${PORT} (proxying /v1/* -> ${GATEWAY})`);
+  console.log(`Chat Center server running at http://127.0.0.1:${PORT} (gateway ${GATEWAY}, agents ${AGENTS.join(', ')})`);
   if (DEV) console.log('CHAT_DEV=1: development mode' + (GATEWAY_TOKEN ? '' : ' (no gateway token)'));
 });

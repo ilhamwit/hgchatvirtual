@@ -11,9 +11,13 @@ it stops being true. Durable decisions also go in the owning epic's Automation L
 - `server.js` serves the page and proxies to the OpenClaw gateway at
   127.0.0.1:18789 (OpenAI-compatible `/v1/chat/completions`, agent targets
   `openclaw/<agentId>`). Agents: dave, jaden, joel, dylan, nana (+ main/Aurix).
-- OpenClaw derives the session from the request's `user` field; today the page
-  sends `chatcenter:<agentId>`, so every user shares one session per agent
-  (fixed by EPIC-002).
+- OpenClaw derives the session from the request's `user` field. Since EPIC-002
+  the server sends `hgchat:<conversationId>`: one OpenClaw session per
+  conversation (key `agent:<id>:openai-user:hgchat:<uuid>`). Sessions named
+  `chatcenter:<agentId>` are the old shared ones from before EPIC-002.
+- The browser never reaches the gateway: `lib/api.js` (/api/*) stores messages
+  in SQLite and `lib/gateway.js` calls OpenClaw with the token. Each message to
+  an agent starts with `[Dari: <Name> (@user) via HG Chat]`.
 - Attachments are written to `~/.openclaw/media/inbound` and handed to the agent
   as an absolute path.
 - Node v26.8.1 on the host: `node:sqlite` and `node:test` are available.

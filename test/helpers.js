@@ -33,11 +33,16 @@ async function seedDb(file, users = []) {
 // Runs server.js with exactly `env` (plus PATH/HOME/media dir). Resolves once it
 // is listening ({ listening, port, stop, out }) or once it exits ({ code, out }).
 // The database always defaults to a temp file: tests run in the production
-// folder, and the default data/chat-center.db there is the real one.
+// folder, and the default data/chat-center.db there is the real one. Likewise
+// the gateway defaults to a port nothing listens on, never the real OpenClaw.
+const NO_GATEWAY = 'http://127.0.0.1:9';
 function runServer(env, { timeoutMs = 5000 } = {}) {
   const home = tempDir();
   const child = spawn(process.execPath, [SERVER], {
-    env: { PATH: process.env.PATH, HOME: home, CHAT_MEDIA_DIR: home, CHAT_DB_PATH: path.join(home, 'test.db'), ...env }
+    env: {
+      PATH: process.env.PATH, HOME: home, CHAT_MEDIA_DIR: home,
+      CHAT_DB_PATH: path.join(home, 'test.db'), CHAT_GATEWAY_URL: NO_GATEWAY, ...env
+    }
   });
   let out = '';
   let done = false;
@@ -77,6 +82,17 @@ async function startServer(users, extraEnv = {}) {
     base, dbPath,
     stop: async () => { await srv.stop(); fs.rmSync(dir, { recursive: true, force: true }); },
     request: (p, opts = {}) => fetch(base + p, { redirect: 'manual', ...opts }),
+    // JSON call as a logged-in user: returns { status, body }.
+    async json(cookie, method, p, body) {
+      const res = await fetch(base + p, {
+        method, redirect: 'manual',
+        headers: { cookie, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+      let data = null;
+      try { data = await res.json(); } catch (e) { /* empty */ }
+      return { status: res.status, body: data };
+    },
     async login(username, password, headers = {}) {
       const res = await fetch(base + '/login', {
         method: 'POST', redirect: 'manual',
@@ -89,4 +105,35 @@ async function startServer(users, extraEnv = {}) {
   };
 }
 
-module.exports = { freePort, tempDir, seedDb, runServer, startServer };
+// A stand-in for the OpenClaw gateway. `respond(body, req)` returns
+// { status, json, delayMs } (default: echo). Every request is recorded, and
+// `aborted` counts requests the caller cancelled mid-flight.
+function startFakeGateway(respond) {
+  const calls = [];
+  let aborted = 0;
+  const http = require('node:http');
+  const server = http.createServer((req, res) => {
+    let raw = '';
+    req.on('data', (d) => { raw += d; });
+    req.on('end', async () => {
+      const body = JSON.parse(raw || '{}');
+      calls.push({ path: req.url, headers: req.headers, body });
+      const out = (await (respond || (() => ({})))(body, req)) || {};
+      const reply = out.json || { choices: [{ message: { role: 'assistant', content: 'echo: ' + body.messages?.[0]?.content } }] };
+      let gone = false;
+      res.on('close', () => { if (!res.writableFinished) { gone = true; aborted++; } });
+      if (out.delayMs) await new Promise((r) => setTimeout(r, out.delayMs));
+      if (gone) return;
+      res.writeHead(out.status || 200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(reply));
+    });
+  });
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({
+    url: `http://127.0.0.1:${server.address().port}`,
+    calls,
+    get aborted() { return aborted; },
+    close: () => new Promise((r) => { server.closeAllConnections(); server.close(r); })
+  })));
+}
+
+module.exports = { freePort, tempDir, seedDb, runServer, startServer, startFakeGateway };

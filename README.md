@@ -13,14 +13,16 @@ Antarmuka web untuk tim internal HG agar bisa chat dengan AI agent OpenClaw
 ```
 browser ──▶ Cloudflare Tunnel ──▶ server.js (127.0.0.1:8643) ──▶ OpenClaw gateway (127.0.0.1:18789)
                                      │  login + cookie sesi            /v1/chat/completions
-                                     │  menyajikan public/ saja        model = openclaw/<agentId>
+                                     │  /api/* (lib/api.js)            model = openclaw/<agentId>
+                                     │  riwayat di SQLite              user  = hgchat:<conversationId>
+                                     │  menyajikan public/ saja
                                      └─ /upload → ~/.openclaw/media/inbound
 ```
 
 | Path | Isi |
 | --- | --- |
 | `server.js` | HTTP server: login, static `public/`, upload, proxy ke gateway |
-| `lib/` | `db.js` (SQLite + migrasi), `auth.js` (akun, scrypt, sesi, rate limit) |
+| `lib/` | `db.js` (SQLite + migrasi), `auth.js` (akun, sesi, rate limit), `conversations.js` (riwayat), `api.js` (/api/*), `gateway.js` (satu-satunya pemanggil OpenClaw) |
 | `data/` | Database `chat-center.db` (gitignored, mode 600) |
 | `public/` | Satu-satunya folder yang bisa diakses lewat HTTP (`index.html`, `login.html`, `app.js`, `style.css`, `assets/`) |
 | `test/` | Unit test (`node:test`) |
@@ -66,6 +68,23 @@ node scripts/users.js revoke-sessions irfan           # logout di semua perangka
 
 Login gagal 5× dalam 15 menit (per IP atau per username) → 429 sampai jendela
 lewat. Sesi berlaku 30 hari; tombol nama di pojok kiri bawah = keluar.
+
+## API (untuk halaman chat)
+
+Semua butuh login; percakapan milik user lain = 404.
+
+| Method & path | Fungsi |
+| --- | --- |
+| `GET /api/me`, `GET /api/agents` | User yang login; daftar agent |
+| `GET /api/conversations[?agent=dave&archived=1]` | Daftar percakapan milik user |
+| `POST /api/conversations` `{agentId}` | Percakapan baru (= sesi OpenClaw baru) |
+| `GET/PATCH /api/conversations/:id` | Detail; ganti `title` / `archived` |
+| `GET /api/conversations/:id/messages` | Riwayat + `pending` |
+| `POST /api/conversations/:id/messages` `{text, attachments}` | Kirim; balasan disimpan walau browser terputus |
+| `POST /api/conversations/:id/retry` · `/stop` | Ulang pertanyaan terakhir setelah error · hentikan |
+| `POST /api/import` `{history}` | Impor sekali riwayat lama dari localStorage |
+
+Tidak ada lagi proxy `/v1/*`: browser tidak pernah menyentuh gateway.
 
 ## Cek kualitas
 

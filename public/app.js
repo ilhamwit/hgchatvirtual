@@ -1,35 +1,21 @@
-// ─── Openclaw Gateway integration ───────────────
-const OPENCLAW_URL = '/v1/chat/completions'; // relative — proxied by server.js
-// No token here on purpose: server.js injects the gateway token on the proxy
-// hop, and the browser authenticates to this origin with its session cookie.
-const REQUEST_TIMEOUT_MS = 240000; // tool-using agents can take minutes — but never forever
-
-async function askAgent(agentId, message, signal) {
-  const res = await fetch(OPENCLAW_URL, {
-    method: 'POST',
-    signal,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'openclaw/' + agentId,
-      user: 'chatcenter:' + agentId,
-      messages: [{ role: 'user', content: message }]
-    })
+// ─── Server API ───────────────
+// The browser never talks to the OpenClaw gateway. It calls /api/..., and the
+// server stores every message and asks the agent on the user's behalf.
+async function api(method, url, body) {
+  const res = await fetch(url, {
+    method,
+    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body)
   });
+  if (res.status === 401) { location.href = '/login'; throw new Error('Sesi berakhir — silakan login ulang.'); }
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* not JSON (e.g. a proxy error page) */ }
   if (!res.ok) {
-    let detail = '';
-    try {
-      const j = await res.json();
-      const e = j && j.error;
-      detail = typeof e === 'string' ? e : (e && e.message) || '';
-    } catch (e) { /* body was not JSON */ }
-    if (res.status === 401) throw new Error('Sesi berakhir (401) — silakan login ulang.');
-    throw new Error('Gateway error ' + res.status + (detail ? ' — ' + detail : ''));
+    const err = new Error((data && data.error) || ('HTTP ' + res.status));
+    err.status = res.status;
+    throw err;
   }
-  const data = await res.json();
-  const content = data && data.choices && data.choices[0] && data.choices[0].message
-    && data.choices[0].message.content;
-  if (typeof content !== 'string' || !content.trim()) throw new Error('Respons kosong dari gateway');
-  return content;
+  return data;
 }
 
 /* ── SESSION ─────────────────────────────── */
@@ -255,106 +241,83 @@ function formatMsg(text) {
   return html.replace(/\u0000CODE(\d+)\u0000/g, (m,i)=>renderCode(codes[+i]));
 }
 
-// ─── Persisted chat history (per agent, saved in this browser) ───
-const HISTORY_KEY = 'cc_chat_history_v1';
-const MAX_MSGS_PER_AGENT = 200;
-let chatHistory = {};
-let historyWarned = false;
-try { chatHistory = JSON.parse(localStorage.getItem(HISTORY_KEY)) || {}; } catch(e) { chatHistory = {}; }
+// ─── Conversations (stored on the server, per user) ───
+// One conversation = one agent + one OpenClaw session. Each agent shows one
+// conversation at a time; "Chat baru" starts a fresh one.
+let convs = [];             // the user's non-archived conversations, newest first
+const activeConv = {};      // agentId -> conversation id on screen (null = new chat)
+const pending = {};         // conversation id -> true while the agent is answering
+let viewSeq = 0;            // bumps on every switch so late responses don't draw over
 
-function trimHistory() {
-  Object.keys(chatHistory).forEach(k=>{
-    const l = chatHistory[k];
-    if(Array.isArray(l) && l.length > MAX_MSGS_PER_AGENT) chatHistory[k] = l.slice(-MAX_MSGS_PER_AGENT);
-  });
+function fmtTime(ms) {
+  const d = new Date(ms);
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return sameDay ? d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
 }
 
-// Never fail silently: a full quota used to stop persisting history with no
-// sign at all. Now we prune and, if that still fails, say so once.
-function saveHistory() {
-  trimHistory();
+async function refreshConvs() {
   try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
-    return true;
-  } catch(e) {
-    Object.keys(chatHistory).forEach(k=>{
-      const l = chatHistory[k] || [];
-      chatHistory[k] = l.slice(Math.floor(l.length/2));
-    });
-    try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
-      showToast('⚠️ Penyimpanan browser penuh — riwayat lama dipangkas');
-      return true;
-    } catch(e2) {
-      if(!historyWarned) {
-        historyWarned = true;
-        showToast('⚠️ Riwayat chat tidak bisa disimpan (penyimpanan browser penuh)');
-      }
-      return false;
-    }
-  }
+    const data = await api('GET', '/api/conversations');
+    convs = data.conversations;
+    for (const c of convs) { if (c.pending) pending[c.id] = true; else delete pending[c.id]; }
+  } catch (e) { showToast('⚠️ Gagal memuat riwayat: ' + e.message); }
+  renderHistoryPanel();
 }
 
-// Every message belongs to one explicit agent. Passing it in is what keeps a
-// reply that lands after an agent switch from being drawn with the wrong face
-// and filed under the wrong thread.
+function convIdFor(agentId) {
+  if (agentId in activeConv) return activeConv[agentId];
+  const latest = convs.find(c => c.agentId === agentId);
+  activeConv[agentId] = latest ? latest.id : null;
+  return activeConv[agentId];
+}
+
+// Draws one message. Messages are always drawn for the conversation on screen.
 function addMsg(role, text, opts) {
   const o = opts || {};
   const agent = o.agent || current;
-  const save = o.save !== false;
   const time = o.time || now();
-
-  if(agent.id === current.id) {
-    const area=document.getElementById('msgArea');
-    const row=document.createElement('div');
-    row.className='msg-row'+(role==='u'?' u':'');
-    const html = formatMsg(text) + renderMsgAtt(o.att);
-    if(role==='u') {
-      row.innerHTML=`<div class="msg-avi u"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="msg-col"><div class="msg-bubble">${html}</div><div class="msg-time">${time}</div></div>`;
-    } else {
-      row.innerHTML=`<div class="msg-avi"><img src="${agent.img}" alt="${escapeAttr(agent.name)}"></div><div class="msg-col"><div class="msg-bubble">${html}</div><div class="msg-time">${time}</div></div>`;
-    }
-    const typ = document.getElementById('typRow');
-    if(typ) area.insertBefore(row, typ); else area.appendChild(row);
-    area.scrollTop=area.scrollHeight;
+  const area=document.getElementById('msgArea');
+  const row=document.createElement('div');
+  row.className='msg-row'+(role==='u'?' u':'');
+  const html = formatMsg(text) + renderMsgAtt(o.att);
+  if(role==='u') {
+    row.innerHTML=`<div class="msg-avi u"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="msg-col"><div class="msg-bubble">${html}</div><div class="msg-time">${time}</div></div>`;
+  } else {
+    row.innerHTML=`<div class="msg-avi"><img src="${agent.img}" alt="${escapeAttr(agent.name)}"></div><div class="msg-col"><div class="msg-bubble">${html}</div><div class="msg-time">${time}</div></div>`;
   }
-
-  if(save) {
-    if(!chatHistory[agent.id]) chatHistory[agent.id]=[];
-    const rec={role,text,time,ts:Date.now()};
-    if(o.att && o.att.length) rec.att=o.att;
-    chatHistory[agent.id].push(rec);
-    saveHistory();
-    renderHistoryPanel();
-  }
+  const typ = document.getElementById('typRow');
+  if(typ) area.insertBefore(row, typ); else area.appendChild(row);
+  area.scrollTop=area.scrollHeight;
 }
 
-// Failures get their own bubble with a retry — never a canned reply dressed up
-// as the agent's answer. Not persisted: nothing fake ends up in history.
-const retryJobs = {};
-let retrySeq = 0;
-function addErrorMsg(agent, text, detail) {
-  if(agent.id !== current.id) { showToast('⚠️ ' + agent.name + ': ' + detail); return; }
-  const id = 'rt' + (++retrySeq);
-  retryJobs[id] = { agentId: agent.id, text };
+// A failed turn is stored as an error message. Only the latest one gets a
+// retry button: retrying re-asks the last question without storing it twice.
+function addErrorMsg(agent, detail, opts) {
+  const o = opts || {};
   const area=document.getElementById('msgArea');
   const row=document.createElement('div');
   row.className='msg-row err';
-  row.id='errRow_'+id;
-  row.innerHTML=`<div class="msg-avi"><img src="${agent.img}" alt="${escapeAttr(agent.name)}"></div><div class="msg-col"><div class="msg-bubble err-bubble"><div class="err-head"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Pesan tidak terkirim</div><div class="err-detail">${escapeHtml(detail)}</div><button class="err-retry" onclick="retryMsg('${id}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Coba lagi</button></div><div class="msg-time">${now()}</div></div>`;
+  const retry = o.retry ? `<button class="err-retry" onclick="retryMsg(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Coba lagi</button>` : '';
+  row.innerHTML=`<div class="msg-avi"><img src="${agent.img}" alt="${escapeAttr(agent.name)}"></div><div class="msg-col"><div class="msg-bubble err-bubble"><div class="err-head"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Pesan tidak terkirim</div><div class="err-detail">${escapeHtml(detail)}</div>${retry}</div><div class="msg-time">${o.time || now()}</div></div>`;
   area.appendChild(row);
   area.scrollTop=area.scrollHeight;
 }
 
-function retryMsg(id) {
-  const job = retryJobs[id];
-  if(!job) return;
-  const agent = AGENTS.find(a=>a.id===job.agentId);
-  if(!agent || pending[agent.id]) return;
-  delete retryJobs[id];
-  const row = document.getElementById('errRow_'+id);
-  if(row) row.remove();
-  runTurn(agent, job.text);
+function drawStored(m, agent, isLast) {
+  const time = fmtTime(m.createdAt);
+  if (m.role === 'user') addMsg('u', m.content, { agent, att: m.attachments, time });
+  else if (m.role === 'assistant') addMsg('a', m.content, { agent, time });
+  else addErrorMsg(agent, m.content, { retry: isLast, time });
+}
+
+async function retryMsg(btn) {
+  const agent = current;
+  const convId = activeConv[agent.id];
+  if (!convId || pending[convId]) return;
+  const row = btn.closest('.msg-row');
+  if (row) row.remove();
+  await runTurn(agent, convId, () => api('POST', '/api/conversations/' + convId + '/retry'));
 }
 
 function truncate(s,n) { s=s.replace(/\s+/g,' ').trim(); return s.length>n ? s.slice(0,n-1)+'…' : s; }
@@ -362,50 +325,70 @@ function truncate(s,n) { s=s.replace(/\s+/g,' ').trim(); return s.length>n ? s.s
 function renderHistoryPanel() {
   const body = document.getElementById('histBody');
   if(!body) return;
-  const entries = AGENTS.map(a=>{
-    const list = chatHistory[a.id];
-    if(!list || !list.length) return null;
-    const last = list[list.length-1];
-    return { agent:a, last, ts: last.ts||0 };
-  }).filter(Boolean).sort((x,y)=>y.ts-x.ts);
-
-  if(!entries.length) {
+  const items = convs.filter(c => c.lastMessage && AGENTS.some(a => a.id === c.agentId));
+  if(!items.length) {
     body.innerHTML = `<div class="hist-empty">
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#C9C9D6" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
       <p>Belum ada riwayat percakapan.<br>Mulai chat dengan salah satu agent.</p>
     </div>`;
     return;
   }
-
-  body.innerHTML = entries.map(({agent,last})=>{
-    const prefix = last.role==='u' ? 'Anda: ' : '';
-    return `<div class="hist-item${agent.id===current.id?' on':''}" onclick="switchAgent('${agent.id}')">
+  body.innerHTML = items.map(c=>{
+    const agent = AGENTS.find(a => a.id === c.agentId);
+    const last = c.lastMessage;
+    const prefix = last.role==='user' ? 'Anda: ' : last.role==='error' ? '⚠️ ' : '';
+    const on = agent.id===current.id && activeConv[agent.id]===c.id;
+    const busy = pending[c.id] ? ' · …' : '';
+    return `<div class="hist-item${on?' on':''}" onclick="openConversation('${agent.id}','${c.id}')">
       <div class="hist-avi"><img src="${agent.img}" alt="${agent.name}"></div>
       <div class="hist-info">
-        <div class="hist-row1"><span class="hist-name">${agent.name}</span><span class="hist-time">${last.time}</span></div>
-        <div class="hist-preview">${escapeHtml(prefix+truncate(last.text,54))}</div>
+        <div class="hist-row1"><span class="hist-name">${agent.name}${busy}</span><span class="hist-time">${fmtTime(c.updatedAt)}</span></div>
+        <div class="hist-preview"><b>${escapeHtml(truncate(c.title || 'Tanpa judul', 40))}</b><br>${escapeHtml(prefix+truncate(last.content,54))}</div>
       </div>
     </div>`;
   }).join('');
 }
 
-function loadHistoryView(agentId) {
+function openConversation(agentId, convId) {
+  activeConv[agentId] = convId;
+  switchAgent(agentId);
+}
+
+function newChat() {
+  activeConv[current.id] = null;
+  switchAgent(current.id);
+  document.getElementById('chatTa').focus();
+}
+
+function showWelcome(show) {
+  document.getElementById('viewWelcome').classList.toggle('hidden', !show);
+  document.getElementById('viewChat').classList.toggle('hidden', show);
+}
+
+async function loadHistoryView(agentId) {
   const agent = AGENTS.find(a=>a.id===agentId) || current;
-  const list = chatHistory[agentId];
-  const busy = !!pending[agentId];
+  const convId = convIdFor(agentId);
+  const seq = ++viewSeq;
   document.getElementById('msgArea').innerHTML='';
-  if((list && list.length) || busy) {
-    document.getElementById('viewWelcome').classList.add('hidden');
-    document.getElementById('viewChat').classList.remove('hidden');
-    if(list) list.forEach(m=>addMsg(m.role,m.text,{save:false,time:m.time,agent,att:m.att}));
-    if(busy) showTyping();   // the turn kept running while we were elsewhere
-    updateSendBtn();
-    return true;
-  }
-  document.getElementById('viewWelcome').classList.remove('hidden');
-  document.getElementById('viewChat').classList.add('hidden');
   updateSendBtn();
-  return false;
+  if (!convId) { showWelcome(true); return; }
+  showWelcome(false);
+  let data;
+  try {
+    data = await api('GET', '/api/conversations/' + convId + '/messages');
+  } catch (e) {
+    if (seq !== viewSeq) return;
+    if (e.status === 404) { activeConv[agentId] = null; showWelcome(true); return; }
+    addErrorMsg(agent, 'Gagal memuat percakapan: ' + e.message);
+    return;
+  }
+  if (seq !== viewSeq) return;
+  document.getElementById('msgArea').innerHTML='';
+  if (!data.messages.length && !data.pending) { showWelcome(true); return; }
+  data.messages.forEach((m, i) => drawStored(m, agent, i === data.messages.length - 1 && !data.pending));
+  if (data.pending) { pending[convId] = true; showTyping(); pollUntilDone(convId); }
+  else delete pending[convId];
+  updateSendBtn();
 }
 
 function showTyping() {
@@ -517,13 +500,12 @@ function renderMsgAtt(att) {
 const SEND_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
 const STOP_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
 
-// One in-flight turn per agent, keyed by agent id.
-const pending = {};
+function busyHere() { const id = activeConv[current.id]; return !!(id && pending[id]); }
 
 function updateSendBtn() {
   const btn=document.getElementById('sendBtn');
   if(!btn) return;
-  const busy=!!pending[current.id];
+  const busy=busyHere();
   btn.classList.toggle('stop',busy);
   btn.title=busy?'Hentikan':'Kirim';
   btn.setAttribute('aria-label',btn.title);
@@ -532,50 +514,73 @@ function updateSendBtn() {
   btn.disabled=false;
 }
 
+// Asks the server to cancel the running turn; the pending request then comes
+// back with a stored "Dihentikan." error.
 function stopCurrent() {
-  const p=pending[current.id];
-  if(!p) return;
-  p.reason='user';
-  p.ctrl.abort();
+  const id = activeConv[current.id];
+  if (id && pending[id]) api('POST', '/api/conversations/' + id + '/stop').catch(() => {});
 }
 
-async function runTurn(agent, text) {
-  if(pending[agent.id]) return;
-  const ctrl=new AbortController();
-  const job={ctrl,text,reason:null};
-  pending[agent.id]=job;
-  const timer=setTimeout(()=>{ job.reason='timeout'; ctrl.abort(); }, REQUEST_TIMEOUT_MS);
-  if(agent.id===current.id) showTyping();
-  updateSendBtn();
+const onScreen = (agent, convId) => agent.id === current.id && activeConv[agent.id] === convId;
+
+// If the request itself is lost (Cloudflare cuts at ~100 s, network blips),
+// the server still finishes the turn and stores the reply: poll until it has.
+const polling = {};
+async function pollUntilDone(convId) {
+  if (polling[convId]) return;
+  polling[convId] = true;
   try {
-    const reply=await askAgent(agent.id,text,ctrl.signal);
-    clearTimeout(timer);
-    delete pending[agent.id];
-    if(agent.id===current.id) removeTyping();
-    addMsg('a',reply,{agent});
-  } catch(err) {
-    clearTimeout(timer);
-    const reason=job.reason;
-    delete pending[agent.id];
-    if(agent.id===current.id) removeTyping();
-    let detail;
-    if(reason==='timeout') {
-      detail='Tidak ada respons dalam ' + Math.round(REQUEST_TIMEOUT_MS/60000) + ' menit — permintaan dihentikan.';
-    } else if(reason==='user') {
-      detail='Dihentikan.';
-    } else if(err && err.name==='AbortError') {
-      detail='Koneksi terputus.';
-    } else {
-      detail=(err && err.message) || 'Gagal menghubungi gateway.';
-      console.error('Openclaw error:',err);
+    for (;;) {
+      await wait(3000);
+      let data;
+      try { data = await api('GET', '/api/conversations/' + convId); } catch (e) { if (e.status === 404) break; continue; }
+      if (!data.conversation.pending) break;
     }
-    addErrorMsg(agent,text,detail);
   } finally {
-    updateSendBtn();
+    delete polling[convId];
+    delete pending[convId];
   }
+  await refreshConvs();
+  const agent = current;
+  if (activeConv[agent.id] === convId) loadHistoryView(agent.id);
+  updateSendBtn();
 }
 
-function sendMsg() {
+// Runs one server turn (send or retry) and draws its reply.
+async function runTurn(agent, convId, request) {
+  pending[convId] = true;
+  if (onScreen(agent, convId)) showTyping();
+  updateSendBtn();
+  renderHistoryPanel();
+  try {
+    const data = await request();
+    delete pending[convId];
+    if (onScreen(agent, convId)) {
+      removeTyping();
+      const r = data.reply;
+      if (r.role === 'assistant') addMsg('a', r.content, { agent, time: fmtTime(r.createdAt) });
+      else addErrorMsg(agent, r.content, { retry: true, time: fmtTime(r.createdAt) });
+    } else if (data.reply.role === 'assistant') {
+      showToast('💬 ' + agent.name + ' sudah membalas');
+    }
+  } catch (err) {
+    if (err.status === 409) {
+      showToast('⏳ ' + agent.name + ' masih memproses pesan sebelumnya');
+      pollUntilDone(convId);
+    } else if (err.status === 400 || err.status === 404) {
+      delete pending[convId];
+      if (onScreen(agent, convId)) { removeTyping(); addErrorMsg(agent, err.message); }
+    } else {
+      // Lost connection or proxy timeout: the turn may still be running.
+      pollUntilDone(convId);
+      return;
+    }
+  }
+  updateSendBtn();
+  refreshConvs();
+}
+
+async function sendMsg() {
   const ta=document.getElementById('chatTa');
   const text=ta.value.trim();
   const ready=staged.filter(s=>s.status==='ok');
@@ -583,26 +588,49 @@ function sendMsg() {
   if(staged.some(s=>s.status==='up')) { showToast('⏳ Lampiran masih diunggah'); return; }
   if(!text && !ready.length) return;
   const agent=current;
-  if(pending[agent.id]) { showToast('⏳ ' + agent.name + ' masih memproses pesan sebelumnya'); return; }
+  if(busyHere()) { showToast('⏳ ' + agent.name + ' masih memproses pesan sebelumnya'); return; }
   if(failed.length) showToast('⚠️ ' + failed.length + ' lampiran gagal diunggah — tidak dikirim');
 
-  // The agent reads attachments off disk, so what goes on the wire is the path.
-  const att=ready.map(s=>({name:s.name,size:s.size,path:s.path}));
-  const wire=att.length
-    ? att.map(a=>'[Lampiran: ' + a.name + ' -> ' + a.path + ']').join('\n') + (text ? '\n\n' + text : '')
-    : text;
+  let convId = activeConv[agent.id];
+  if (!convId) {
+    try {
+      const data = await api('POST', '/api/conversations', { agentId: agent.id });
+      convId = data.conversation.id;
+      activeConv[agent.id] = convId;
+      convs.unshift(data.conversation);
+    } catch (e) { showToast('⚠️ Gagal membuat percakapan: ' + e.message); return; }
+  }
 
-  document.getElementById('viewWelcome').classList.add('hidden');
-  document.getElementById('viewChat').classList.remove('hidden');
+  // The agent reads attachments off disk; the server checks these are uploads.
+  const att=ready.map(s=>({name:s.name,size:s.size,path:s.path}));
+  showWelcome(false);
   addMsg('u',text,{agent,att});
   ta.value='';resize(ta);
   staged=[]; renderAttRow();
-  runTurn(agent,wire);
+  runTurn(agent, convId, () => api('POST', '/api/conversations/' + convId + '/messages', { text, attachments: att }));
 }
 
 function quickSend(t) {
-  if(pending[current.id]) { showToast('⏳ ' + current.name + ' masih memproses pesan sebelumnya'); return; }
+  if(busyHere()) { showToast('⏳ ' + current.name + ' masih memproses pesan sebelumnya'); return; }
   document.getElementById('chatTa').value=t; sendMsg();
+}
+
+/* ── ONE-TIME IMPORT OF BROWSER HISTORY ─────────
+   Before EPIC-002 history lived in this browser's localStorage. Move it to the
+   account of whoever logs in here first; the server ignores a repeat import. */
+const OLD_HISTORY_KEY = 'cc_chat_history_v1';
+async function importOldHistory() {
+  let old = null;
+  try { old = JSON.parse(localStorage.getItem(OLD_HISTORY_KEY) || 'null'); } catch (e) { return; }
+  if (!old || typeof old !== 'object' || !Object.keys(old).length) return;
+  try {
+    const r = await api('POST', '/api/import', { history: old });
+    if (r.imported + r.skipped > 0) {
+      localStorage.removeItem(OLD_HISTORY_KEY);
+      if (r.imported) showToast('📥 ' + r.messages + ' pesan lama dari browser ini dipindahkan ke akun Anda');
+      await refreshConvs();
+    }
+  } catch (e) { /* keep the local copy; try again on the next load */ }
 }
 
 function handleKey(e) { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();} }
@@ -614,4 +642,5 @@ function showToast(msg) {
 }
 
 // INIT APP
-renderDrop();renderSb();switchAgent('dave');
+renderDrop();renderSb();
+refreshConvs().then(() => switchAgent('dave')).then(importOldHistory);

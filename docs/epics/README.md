@@ -15,7 +15,7 @@ riwayat tersimpan di server, dan agent yang benar-benar membantu kerja tim.
 | ------------------------------------------------------ | ------- | --------------------------------------- | -------- | ------- |
 | [EPIC-000](EPIC-000-foundation.md)                     | Phase 0 | Fondasi repo, struktur file, env        | P0       | done |
 | [EPIC-001](EPIC-001-multi-user-auth.md)                | Phase 1 | Akun per orang & sesi login             | P0       | done |
-| [EPIC-002](EPIC-002-server-side-history.md)            | Phase 1 | Riwayat percakapan di server + API chat | P0       | backlog |
+| [EPIC-002](EPIC-002-server-side-history.md)            | Phase 1 | Riwayat percakapan di server + API chat | P0       | ready-for-qa |
 | [EPIC-003](EPIC-003-streaming-chat-ux.md)              | Phase 2 | Streaming & UX percakapan               | P1       | backlog |
 | [EPIC-004](EPIC-004-attachments-retention.md)          | Phase 2 | Lampiran per percakapan + retensi       | P1       | backlog |
 | [EPIC-005](EPIC-005-operations.md)                     | Phase 2 | Operasional: backup, health, log        | P1       | backlog |
