@@ -23,6 +23,7 @@ riwayat tersimpan di server, dan agent yang benar-benar membantu kerja tim.
 | [EPIC-007](EPIC-007-hermes-backend.md)                 | Phase 1 | Backend agent pindah ke Hermes          | P0       | done |
 | [EPIC-008](EPIC-008-whatsapp-agent.md)                 | Phase 2 | Menu WhatsApp (grup, ringkasan, nomor)  | P1       | ready-for-qa |
 | [EPIC-009](EPIC-009-schedule.md)                       | Phase 2 | Schedule: jadwal & meeting (agenda, kirim ke grup, pengingat) | P1       | on-progress |
+| [EPIC-010](EPIC-010-task-focus.md)                     | Phase 2 | Task Focus: tugas tim, fokus saya, papan | P1       | on-progress |
 
 **Definition of MVP:** selesainya EPIC-000 → EPIC-002.
 

@@ -21,12 +21,14 @@ async function api(method, url, body) {
 /* ── SESSION ─────────────────────────────── */
 // The server checked the login before serving this page; this only shows who
 // is signed in and wires up logout.
+let ME = null;   // { username, displayName, role } of whoever is logged in
 async function loadMe() {
   try {
     const res = await fetch('/api/me');
     if (res.status === 401) { location.href = '/login'; return; }
     if (!res.ok) return;
     const me = await res.json();
+    ME = me;
     document.getElementById('sbUname').textContent = me.displayName;
     document.getElementById('sbUstatus').textContent = (me.role === 'admin' ? 'Admin · ' : '') + 'Keluar';
   } catch (e) { /* offline: keep the placeholder */ }
@@ -36,7 +38,7 @@ async function logout() {
   try { await fetch('/logout', { method: 'POST' }); } finally { location.href = '/login'; }
 }
 
-loadMe();
+const meReady = loadMe();
 
 /* ── AGENTS ─────────────────────────────── */
 const IMGS = {
@@ -677,7 +679,8 @@ const WA_PAGES = {
   summary: { title: 'Summary Chat' },
   connect: { title: 'Koneksikan WA' },
   // Not WhatsApp, but the same full-width page slot (EPIC-009).
-  schedule: { title: 'Jadwal & Meeting', crumb: 'Schedule', hash: 'schedule' }
+  schedule: { title: 'Jadwal & Meeting', crumb: 'Schedule', hash: 'schedule' },
+  tasks: { title: 'Fokus saya', crumb: 'Task Focus', hash: 'tasks' }
 };
 const pageHash = (key) => '#' + (WA_PAGES[key].hash || 'wa-' + key);
 let waPage = null;
@@ -1465,12 +1468,291 @@ async function schDelete() {
   schRenderPanel();
 }
 
+/* ── Task Focus (EPIC-010) ─────────────
+   "Fokus saya": my open tasks grouped by due date (WIB). "Papan tim": every
+   task in three columns, filterable per person, drag to change status. The
+   panel on the right shows one task: fields, comments and its history. */
+const tf = { view: 'focus', who: '', tasks: [], people: [], cur: null, confirm: false };
+const TF_STATUS = { todo: 'Belum', doing: 'Dikerjakan', done: 'Selesai' };
+const TF_PRIO = { high: 'Tinggi', normal: 'Normal', low: 'Rendah' };
+const TF_COLORS = ['#C9A84C', '#2563EB', '#16A34A', '#DB2777', '#7C3AED', '#EA580C', '#0891B2'];
+const tfToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
+const tfDays = (a, b) => Math.round((Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8)) - Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8))) / 86400000);
+const tfMine = (t) => t.assignee && ME && t.assignee.username === ME.username;
+function tfInitials(p) { return p ? p.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() : '?'; }
+function tfColor(p) { if (!p) return '#C9C9D6'; let h = 0; for (const c of p.username) h = (h * 31 + c.charCodeAt(0)) >>> 0; return TF_COLORS[h % TF_COLORS.length]; }
+function tfAvatar(p) { return `<span class="tf-avi" style="background:${tfColor(p)}" title="${escapeAttr(p ? p.name : 'Belum ada penanggung jawab')}">${escapeHtml(tfInitials(p))}</span>`; }
+
+// "Terlambat 2 hari", "Hari ini", "Besok", "Rab, 22 Okt".
+function tfDue(t) {
+  if (!t.dueDate) return null;
+  const d = tfDays(tfToday(), t.dueDate);
+  if (t.status !== 'done' && d < 0) return { cls: 'late', text: d === -1 ? 'Terlambat 1 hari' : `Terlambat ${-d} hari` };
+  if (d === 0) return { cls: 'today', text: 'Hari ini' };
+  if (d === 1) return { cls: 'soon', text: 'Besok' };
+  return { cls: '', text: new Intl.DateTimeFormat('id-ID', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(t.dueDate + 'T00:00:00Z')) };
+}
+
+async function tfOpen() {
+  const el = document.getElementById('tasksPage');
+  el.innerHTML = `<div class="tf-main">
+      <div class="tf-head">
+        <div class="tf-tabs" role="tablist">
+          <button type="button" data-v="focus" onclick="tfView('focus')">Fokus saya</button>
+          <button type="button" data-v="board" onclick="tfView('board')">Papan tim</button>
+        </div>
+        <select class="tf-who hidden" id="tfWho" onchange="tf.who=this.value;tfLoad()" aria-label="Tampilkan tugas milik"></select>
+      </div>
+      <form class="tf-add" onsubmit="event.preventDefault();tfAdd()">
+        <span class="tf-add-plus">+</span>
+        <input id="tfNew" maxlength="300" placeholder="Tambah tugas… lalu tekan Enter" autocomplete="off">
+        <select id="tfNewWho" aria-label="Penanggung jawab"></select>
+        <input type="date" id="tfNewDue" aria-label="Tenggat">
+        <button class="wa-btn primary" type="submit">Tambah</button>
+      </form>
+      <div class="tf-body" id="tfBody"><div class="wa-msg"><span class="wa-spin"></span>Memuat tugas…</div></div>
+    </div>
+    <div class="tf-panel" id="tfPanel"></div>`;
+  await meReady;
+  try { tf.people = (await api('GET', '/api/tasks/people')).people; } catch (e) { tf.people = []; }
+  if (waPage !== 'tasks') return;
+  const me = ME && tf.people.find((p) => p.username === ME.username);
+  document.getElementById('tfNewWho').innerHTML = tf.people.map((p) => `<option value="${escapeAttr(p.username)}"${me && p.id === me.id ? ' selected' : ''}>${escapeHtml(me && p.id === me.id ? 'Saya' : p.name)}</option>`).join('');
+  document.getElementById('tfWho').innerHTML = '<option value="">Semua orang</option>' +
+    tf.people.map((p) => `<option value="${escapeAttr(p.username)}">${escapeHtml(p.name)}</option>`).join('') + '<option value="-">Belum ada penanggung jawab</option>';
+  tf.cur = null; tf.confirm = false;
+  tfView(tf.view);
+}
+function tfClose() { tf.cur = null; }
+
+function tfView(v) {
+  tf.view = v;
+  document.querySelectorAll('.tf-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
+  document.getElementById('tfWho').classList.toggle('hidden', v !== 'board');
+  document.getElementById('waTitle').textContent = v === 'board' ? 'Papan tim' : 'Fokus saya';
+  tfLoad();
+}
+
+async function tfLoad() {
+  const q = tf.view === 'focus' ? '?mine=1' : tf.who ? '?assignee=' + encodeURIComponent(tf.who) : '';
+  try { tf.tasks = (await api('GET', '/api/tasks' + q)).tasks; }
+  catch (e) { document.getElementById('tfBody').innerHTML = `<div class="wa-msg err">Gagal memuat tugas: ${escapeHtml(e.message)}</div>`; return; }
+  if (waPage !== 'tasks') return;
+  tfRender();
+  if (!tf.cur) tfRenderPanel();
+}
+
+function tfRender() {
+  const body = document.getElementById('tfBody');
+  body.innerHTML = tf.view === 'board' ? tfBoardHtml() : tfFocusHtml();
+}
+
+function tfRowHtml(t, { showWho } = {}) {
+  const due = tfDue(t);
+  const meta = [
+    due ? `<span class="tf-due ${due.cls}">${escapeHtml(due.text)}</span>` : '',
+    t.status === 'doing' ? '<span class="tf-doing">Dikerjakan</span>' : '',
+    t.priority === 'high' ? '<span class="tf-prio">● Prioritas tinggi</span>' : '',
+    t.comments ? `<span class="tf-cm">💬 ${t.comments}</span>` : ''
+  ].filter(Boolean).join('');
+  return `<div class="tf-row${t.status === 'done' ? ' done' : ''}${tf.cur && tf.cur.task.id === t.id ? ' on' : ''}" onclick="tfShow(${t.id})">
+      <button type="button" class="tf-check" onclick="event.stopPropagation();tfToggle(${t.id})" aria-label="${t.status === 'done' ? 'Tandai belum selesai' : 'Tandai selesai'}">${t.status === 'done' ? '✓' : ''}</button>
+      <div class="tf-row-main"><div class="tf-title">${escapeHtml(t.title)}</div>${meta ? `<div class="tf-meta">${meta}</div>` : ''}</div>
+      ${showWho || !tfMine(t) ? tfAvatar(t.assignee) : ''}
+    </div>`;
+}
+
+function tfFocusHtml() {
+  const today = tfToday();
+  const groups = [['late', 'Terlambat'], ['today', 'Hari ini'], ['week', '7 hari ke depan'], ['later', 'Nanti'], ['none', 'Tanpa tenggat']];
+  const bucket = { late: [], today: [], week: [], later: [], none: [], done: [] };
+  for (const t of tf.tasks) {
+    if (t.status === 'done') {
+      if (t.doneAt && new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(t.doneAt) === today) bucket.done.push(t);
+      continue;
+    }
+    if (!t.dueDate) { bucket.none.push(t); continue; }
+    const d = tfDays(today, t.dueDate);
+    bucket[d < 0 ? 'late' : d === 0 ? 'today' : d <= 7 ? 'week' : 'later'].push(t);
+  }
+  const open = groups.reduce((n, [k]) => n + bucket[k].length, 0);
+  if (!open && !bucket.done.length) {
+    return `<div class="tf-empty"><div class="tf-empty-ic">✓</div><b>Tidak ada tugas untuk Anda</b>
+      <p>Tambahkan tugas di kolom atas, atau lihat <a href="#tasks" onclick="event.preventDefault();tfView('board')">Papan tim</a>.</p></div>`;
+  }
+  let html = groups.filter(([k]) => bucket[k].length).map(([k, label]) => `<div class="tf-group ${k}">
+      <div class="tf-group-h">${label} <span>${bucket[k].length}</span></div>${bucket[k].map((t) => tfRowHtml(t)).join('')}</div>`).join('');
+  if (!open) html += '<div class="tf-allclear">🎉 Semua tugas Anda sudah selesai.</div>';
+  if (bucket.done.length) {
+    html += `<details class="tf-group done"><summary class="tf-group-h">Selesai hari ini <span>${bucket.done.length}</span></summary>${bucket.done.map((t) => tfRowHtml(t)).join('')}</details>`;
+  }
+  return html;
+}
+
+function tfBoardHtml() {
+  const cols = Object.entries(TF_STATUS).map(([s, label]) => {
+    const items = tf.tasks.filter((t) => t.status === s);
+    return `<div class="tf-col" data-status="${s}" ondragover="event.preventDefault();this.classList.add('drop')" ondragleave="this.classList.remove('drop')" ondrop="tfDrop(event,'${s}')">
+        <div class="tf-col-h"><span class="tf-dot ${s}"></span>${label} <span>${items.length}</span></div>
+        <div class="tf-col-body">${items.map((t) => {
+          const due = tfDue(t);
+          return `<div class="tf-card${tf.cur && tf.cur.task.id === t.id ? ' on' : ''}" draggable="true" ondragstart="event.dataTransfer.setData('text/plain','${t.id}')" onclick="tfShow(${t.id})">
+            <div class="tf-card-top"><div class="tf-title">${escapeHtml(t.title)}</div>${tfAvatar(t.assignee)}</div>
+            ${due || t.priority === 'high' || t.comments ? `<div class="tf-card-foot">${due ? `<span class="tf-due ${due.cls}">${escapeHtml(due.text)}</span>` : ''}
+              ${t.priority === 'high' ? '<span class="tf-prio">● Tinggi</span>' : ''}${t.comments ? `<span class="tf-cm">💬 ${t.comments}</span>` : ''}</div>` : ''}
+          </div>`;
+        }).join('') || '<div class="tf-col-empty">Kosong</div>'}</div>
+      </div>`;
+  }).join('');
+  return `<div class="tf-board">${cols}</div><div class="tf-hint">Seret kartu ke kolom lain untuk mengubah status. Tugas selesai tampil selama 14 hari.</div>`;
+}
+
+async function tfDrop(ev, status) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('drop');
+  const id = Number(ev.dataTransfer.getData('text/plain'));
+  const t = tf.tasks.find((x) => x.id === id);
+  if (!t || t.status === status) return;
+  await tfPatch(id, { status }, status === 'done' ? 'Tugas selesai' : 'Status: ' + TF_STATUS[status]);
+}
+
+async function tfAdd() {
+  const input = document.getElementById('tfNew');
+  const title = input.value.trim();
+  if (!title) { input.focus(); return; }
+  const body = { title, assignee: document.getElementById('tfNewWho').value || null };
+  const due = document.getElementById('tfNewDue').value;
+  if (due) body.dueDate = due;
+  try {
+    const out = await api('POST', '/api/tasks', body);
+    input.value = ''; document.getElementById('tfNewDue').value = '';
+    showToast(tfMine(out.task) || tf.view === 'board' ? 'Tugas ditambahkan' : `Tugas ditambahkan untuk ${out.task.assignee ? out.task.assignee.name : 'tim'}`);
+    await tfLoad();
+    tfBadge();
+  } catch (e) { showToast(e.message); }
+  input.focus();
+}
+
+async function tfToggle(id) {
+  const t = tf.tasks.find((x) => x.id === id) || (tf.cur && tf.cur.task.id === id && tf.cur.task);
+  if (!t) return;
+  await tfPatch(id, { status: t.status === 'done' ? 'todo' : 'done' }, t.status === 'done' ? 'Tugas dibuka lagi' : 'Tugas selesai ✓');
+}
+
+// One change to a task, then refresh what shows it.
+async function tfPatch(id, body, okMsg) {
+  try {
+    const out = await api('PATCH', '/api/tasks/' + id, body);
+    if (tf.cur && tf.cur.task.id === id) { tf.cur = out; tfRenderPanel(); }
+    if (okMsg) showToast(okMsg);
+  } catch (e) { showToast(e.message); if (tf.cur && tf.cur.task.id === id) tfRenderPanel(); }
+  await tfLoad();
+  tfBadge();
+}
+
+/* ── One task ── */
+async function tfShow(id) {
+  try { tf.cur = await api('GET', '/api/tasks/' + id); }
+  catch (e) { showToast('Gagal memuat tugas: ' + e.message); return; }
+  tf.confirm = false;
+  tfRender(); tfRenderPanel();
+}
+function tfHide() { tf.cur = null; tf.confirm = false; tfRender(); tfRenderPanel(); }
+
+function tfRenderPanel() {
+  const el = document.getElementById('tfPanel');
+  if (!el) return;
+  if (!tf.cur) {
+    const mine = tf.view === 'focus' ? tf.tasks : tf.tasks.filter(tfMine);
+    const today = tfToday();
+    const open = mine.filter((t) => t.status !== 'done');
+    const late = open.filter((t) => t.dueDate && t.dueDate < today).length;
+    const now = open.filter((t) => t.dueDate === today).length;
+    const doing = open.filter((t) => t.status === 'doing').length;
+    el.innerHTML = `<div class="tf-hello"><div class="tf-hello-day">${escapeHtml(waDay(today + 'T12:00:00+07:00'))}</div>
+        <h3>Halo${ME ? ', ' + escapeHtml(ME.displayName.split(' ')[0]) : ''} 👋</h3>
+        <div class="tf-stats">
+          <div class="${late ? 'late' : ''}"><b>${late}</b><span>Terlambat</span></div>
+          <div><b>${now}</b><span>Hari ini</span></div>
+          <div><b>${doing}</b><span>Dikerjakan</span></div>
+        </div>
+        <p class="tf-tip">${tf.view === 'focus' ? 'Ini tugas yang ditugaskan ke Anda. Klik tugas untuk melihat detail, komentar, dan riwayatnya.' : 'Seluruh tugas tim. Pilih orang di atas untuk melihat tugas satu orang.'}</p></div>`;
+    return;
+  }
+  const { task: t, activity } = tf.cur;
+  const canDelete = ME && ((t.createdBy && t.createdBy.username === ME.username) || ME.role === 'admin');
+  const people = '<option value="">— Belum ada —</option>' + tf.people.map((p) => `<option value="${escapeAttr(p.username)}"${t.assignee && t.assignee.id === p.id ? ' selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+  const feed = activity.map((a) => a.kind === 'comment'
+    ? `<div class="tf-comment"><div class="tf-comment-h"><b>${escapeHtml(a.by)}</b><span>${escapeHtml(schWibStamp(a.at))}</span></div><div class="tf-comment-b">${linkify(escapeHtml(a.body))}</div></div>`
+    : `<div class="tf-hist"><b>${escapeHtml(a.by)}</b> ${escapeHtml(a.body)} · ${escapeHtml(schWibStamp(a.at))}</div>`).join('');
+  el.innerHTML = `<div class="sc-ph"><button class="sc-back" type="button" onclick="tfHide()">‹ Tutup</button></div>
+    <div class="tf-d-title"><button type="button" class="tf-check big${t.status === 'done' ? ' checked' : ''}" onclick="tfToggle(${t.id})" aria-label="Tandai selesai">${t.status === 'done' ? '✓' : ''}</button>
+      <textarea id="tfTitle" rows="1" maxlength="300" onchange="tfPatch(${t.id},{title:this.value})">${escapeHtml(t.title)}</textarea></div>
+    <div class="tf-seg">${Object.entries(TF_STATUS).map(([s, l]) => `<button type="button" class="${t.status === s ? 'on ' + s : ''}" onclick="tfPatch(${t.id},{status:'${s}'})">${l}</button>`).join('')}</div>
+    <div class="tf-fields">
+      <label class="tf-wide">Penanggung jawab<select onchange="tfPatch(${t.id},{assignee:this.value||null})">${people}</select></label>
+      <label>Tenggat<input type="date" value="${t.dueDate || ''}" onchange="tfPatch(${t.id},{dueDate:this.value||null})"></label>
+      <label>Prioritas<select onchange="tfPatch(${t.id},{priority:this.value})">${Object.entries(TF_PRIO).map(([k, l]) => `<option value="${k}"${t.priority === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    </div>
+    <label class="tf-notes">Catatan<textarea rows="4" maxlength="4000" placeholder="Detail, link, atau langkah-langkah…" onchange="tfPatch(${t.id},{notes:this.value})">${escapeHtml(t.notes || '')}</textarea></label>
+    <div class="sc-by">Dibuat oleh ${escapeHtml(t.createdBy ? t.createdBy.name : '—')}, ${escapeHtml(schWibStamp(t.createdAt))}${t.doneAt ? ` · selesai oleh ${escapeHtml(t.doneBy ? t.doneBy.name : '—')}, ${escapeHtml(schWibStamp(t.doneAt))}` : ''}</div>
+    <div class="sc-sec"><div class="sc-sec-h">Komentar & riwayat</div>
+      <div class="tf-feed">${feed}</div>
+      <form class="tf-cform" onsubmit="event.preventDefault();tfComment(${t.id})">
+        <textarea id="tfComment" rows="2" maxlength="2000" placeholder="Tulis komentar…" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();tfComment(${t.id})}"></textarea>
+        <button class="wa-btn primary" type="submit">Kirim</button>
+      </form></div>
+    ${canDelete ? (tf.confirm ? `<div class="sc-confirm"><p>Hapus tugas ini beserta komentarnya?</p><div class="sc-actions">
+        <button class="wa-btn ghost" type="button" onclick="tf.confirm=false;tfRenderPanel()">Kembali</button>
+        <button class="wa-btn danger" type="button" onclick="tfDelete(${t.id})">Ya, hapus</button></div></div>`
+      : `<div class="sc-actions sc-manage"><button class="wa-btn ghost" type="button" onclick="tf.confirm=true;tfRenderPanel()">Hapus tugas</button></div>`) : ''}`;
+  const ta = document.getElementById('tfTitle');
+  ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px';
+  const feedEl = el.querySelector('.tf-feed');
+  if (feedEl) feedEl.scrollTop = feedEl.scrollHeight;
+}
+
+async function tfComment(id) {
+  const box = document.getElementById('tfComment');
+  const text = box.value.trim();
+  if (!text) return;
+  try { tf.cur = await api('POST', `/api/tasks/${id}/comments`, { body: text }); }
+  catch (e) { showToast(e.message); return; }
+  tfRenderPanel();
+  tfLoad();
+}
+
+async function tfDelete(id) {
+  try { await api('DELETE', '/api/tasks/' + id); }
+  catch (e) { showToast(e.message); return; }
+  showToast('Tugas dihapus');
+  tf.cur = null; tf.confirm = false;
+  await tfLoad(); tfRenderPanel(); tfBadge();
+}
+
+// Sidebar badge: my tasks that are late or due today.
+async function tfBadge() {
+  const b = document.getElementById('tfBadge');
+  if (!b) return;
+  try {
+    const s = await api('GET', '/api/tasks/summary');
+    const n = s.overdue + s.dueToday;
+    b.textContent = n;
+    b.classList.toggle('hidden', !n);
+    b.classList.toggle('late', s.overdue > 0);
+    b.title = `${s.overdue} terlambat, ${s.dueToday} hari ini`;
+  } catch (e) { /* keep the last value */ }
+}
+tfBadge();
+setInterval(tfBadge, 5 * 60 * 1000);
+
 /* ── Page registry: one container per WhatsApp page ── */
 const WA_IMPL = {
   connect: { el: 'waConnect', open: waConnectOpen, close: waConnectClose },
   groups: { el: 'waGroupsPage', open: waGroupsOpen, close: waGroupsClose },
   summary: { el: 'waSummaryPage', open: waSummaryOpen, close: waSummaryClose },
-  schedule: { el: 'schedulePage', open: schOpen, close: schClose }
+  schedule: { el: 'schedulePage', open: schOpen, close: schClose },
+  tasks: { el: 'tasksPage', open: tfOpen, close: tfClose }
 };
 function closeWaPages() { for (const p of Object.values(WA_IMPL)) p.close(); }
 

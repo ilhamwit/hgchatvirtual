@@ -21,6 +21,7 @@ const { createApi } = require('./lib/api');
 const { createWhatsApp } = require('./lib/whatsapp');
 const { createWaArchive } = require('./lib/wa-archive');
 const { createEvents } = require('./lib/events');
+const { createTasks } = require('./lib/tasks');
 
 // Fail fast on bad config. Production (systemd) must provide the Hermes
 // API key; CHAT_DEV=1 is the explicit opt-out for local UI work. See .env.example.
@@ -124,7 +125,9 @@ const api = createApi({
   whatsapp,
   // Group reading + summaries from Hermes' WhatsApp group archive (read only).
   waArchive: createWaArchive({ db, gateway }),
-  events
+  events,
+  // Task Focus (EPIC-010): team tasks and their activity.
+  tasks: createTasks({ db })
 });
 
 // Keep only a basename, and only characters that are safe in a shell argument

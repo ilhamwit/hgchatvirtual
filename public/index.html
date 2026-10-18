@@ -49,11 +49,11 @@
       <div class="sb-section">
         <div class="nav-item on" onclick="navClick(this)">
           <span class="ni"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
-          Chat &amp; Discussion <span class="nb">3</span>
+          Chat &amp; Discussion
         </div>
-        <div class="nav-item" onclick="navClick(this)">
+        <div class="nav-item" data-wa="tasks" onclick="openWaPage('tasks')">
           <span class="ni"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
-          Task Focus
+          Task Focus <span class="nb hidden" id="tfBadge"></span>
         </div>
         <div class="nav-item" data-wa="schedule" onclick="openWaPage('schedule')">
           <span class="ni"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
@@ -186,6 +186,8 @@
       <!-- Pilih Group (T-043) and Summary Chat (T-045): drawn by app.js -->
       <div class="wa-page wa-full hidden" id="waGroupsPage"></div>
       <div class="wa-page hidden" id="waSummaryPage"></div>
+      <!-- Task Focus (EPIC-010): my focus + team board, drawn by app.js -->
+      <div class="wa-page wa-full hidden" id="tasksPage"></div>
       <!-- Schedule (EPIC-009): calendar + events, drawn by app.js -->
       <div class="wa-page wa-full hidden" id="schedulePage"></div>
     </div>

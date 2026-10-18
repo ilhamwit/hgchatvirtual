@@ -59,3 +59,13 @@ test('nothing is sent to a group without the confirm step', () => {
   assert.match(js, /onclick="schSend\(\)">Ya, kirim sekarang<\/button>/);
   assert.strictEqual((js.match(/schSend\(\)/g) || []).length, 2, 'defined once, called once');
 });
+
+// EPIC-010: Task Focus opens my focus / team board; the badge is real.
+test('sidebar Task Focus opens #tasks with a real badge', () => {
+  assert.match(html, /<div class="nav-item" data-wa="tasks" onclick="openWaPage\('tasks'\)">[\s\S]*?<\/span>\s*Task Focus <span class="nb hidden" id="tfBadge"><\/span>\s*<\/div>/);
+  assert.match(js, /\btasks: \{ title: 'Fokus saya', crumb: 'Task Focus', hash: 'tasks' \}/);
+  assert.match(js, /\btasks: \{ el: 'tasksPage', open: tfOpen, close: tfClose \}/);
+  assert.match(html, /<div class="wa-page wa-full hidden" id="tasksPage">/);
+  assert.match(js, /api\('GET', '\/api\/tasks\/summary'\)/);
+  assert.doesNotMatch(html, /Chat &amp; Discussion <span class="nb">3<\/span>/, 'no made-up unread count');
+});
