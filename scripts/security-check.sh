@@ -38,7 +38,8 @@ if [ -n "$hits" ]; then FAIL "secret-like pattern in: $(echo $hits)"; else echo 
 
 echo "==> Known risks (tracked by epics)"
 grep -q "Access-Control-Allow-Origin', '\*'" server.js 2>/dev/null && WARN "server.js sends CORS * (EPIC-001 T-011)"
-grep -qE "CORRECT_PIN = '[0-9]+'" hg-chat-ai-agent.html 2>/dev/null && WARN "client-side PIN in hg-chat-ai-agent.html (EPIC-001 T-011)"
+pin=$(grep -lE "CORRECT_PIN = '[0-9]+'" public/*.js public/*.html hg-chat-ai-agent.html 2>/dev/null | tr '\n' ' ' || true)
+[ -n "$pin" ] && WARN "client-side PIN in $pin(EPIC-001 T-011)"
 grep -q "req.url.startsWith('/v1/')" server.js 2>/dev/null && WARN "open /v1/* gateway proxy (EPIC-002 T-016)"
 
 echo "==> Dependency audit"

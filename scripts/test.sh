@@ -42,5 +42,24 @@ check() { # path expected-status must-contain
 }
 check /login 200 '<html'
 check / 200 '<html'
+check /hg-chat-ai-agent.html 200 '<html'
+
+status() { curl -sS --path-as-is -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port$1"; }
+
+echo "==> Every local asset referenced by the pages resolves"
+refs=$(grep -ohE '(src|href)="/[^"]+"|/assets/[A-Za-z0-9/_.-]+' public/*.html public/*.js 2>/dev/null \
+  | sed -E 's/^(src|href)="//; s/"$//' | sort -u)
+for r in $refs; do
+  code=$(status "$r")
+  if [ "$code" = "200" ]; then echo "  ok  $r"; else echo "  FAIL $r -> $code"; exit 1; fi
+done
+type=$(curl -sS -o /dev/null -w '%{content_type}' "http://127.0.0.1:$port/assets/hg-logo.png")
+[ "$type" = "image/png" ] && echo "  ok  png served as image/png" || { echo "  FAIL png content-type: $type"; exit 1; }
+
+echo "==> Only public/ is reachable"
+for p in /server.js /.git/config /.agentic/config.yml /docs/epics/README.md /../server.js /%2e%2e/server.js /assets/../../server.js; do
+  code=$(status "$p")
+  case "$code" in 403|404) echo "  ok  $p -> $code" ;; *) echo "  FAIL $p -> $code (must be 403/404)"; exit 1 ;; esac
+done
 
 echo "TEST PASS"

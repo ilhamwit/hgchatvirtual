@@ -17,6 +17,9 @@ const crypto = require('crypto');
 const GATEWAY = 'http://127.0.0.1:18789';
 const PORT = Number(process.env.CHAT_PORT || 8643);
 const ROOT = __dirname;
+// Only this directory is reachable over HTTP. Everything else in ROOT (server
+// code, docs, .git, .agentic) stays private.
+const PUBLIC = path.join(ROOT, 'public');
 
 const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || '';
 const CHAT_USER = process.env.CHAT_USER || '';
@@ -25,7 +28,12 @@ const SECRET = process.env.CHAT_SECRET || crypto.randomBytes(32).toString('hex')
 const COOKIE_NAME = 'chatcenter_auth';
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
+const MIME = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.json': 'application/json',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.svg': 'image/svg+xml', '.webp': 'image/webp', '.ico': 'image/x-icon'
+};
 
 // Attachments follow OpenClaw's own inbound-media convention (the same place the
 // Telegram channel drops files): <slug>---<uuid>.<ext>. The agents read them
@@ -195,7 +203,7 @@ const server = http.createServer((req, res) => {
 
   // Public: the login page itself and its credential-check endpoint.
   if (urlNoQuery === '/login' && req.method === 'GET') {
-    fs.readFile(path.join(ROOT, 'login.html'), (err, data) => {
+    fs.readFile(path.join(PUBLIC, 'login.html'), (err, data) => {
       if (err) { res.writeHead(404); res.end('Not found'); return; }
       res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
       res.end(data);
@@ -262,14 +270,22 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  const urlPath = req.url === '/' ? '/hg-chat-ai-agent.html' : req.url.split('?')[0];
-  const filePath = path.join(ROOT, urlPath);
-  if (!filePath.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
+  // '/hg-chat-ai-agent.html' is the pre-split page name; keep old links working.
+  let urlPath = urlNoQuery === '/' || urlNoQuery === '/hg-chat-ai-agent.html' ? '/index.html' : urlNoQuery;
+  try { urlPath = decodeURIComponent(urlPath); } catch (e) { res.writeHead(400); res.end(); return; }
+  const filePath = path.join(PUBLIC, urlPath);
+  if (!filePath.startsWith(PUBLIC + path.sep)) { res.writeHead(403); res.end(); return; }
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404); res.end('Not found'); return; }
     const ext = path.extname(filePath);
     if (ext === '.html') data = patchHtml(data);
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    res.writeHead(200, {
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      // Everything here sits behind login: never let Cloudflare or a shared
+      // cache keep a copy, but let the browser revalidate.
+      'Cache-Control': 'private, no-cache',
+      'X-Content-Type-Options': 'nosniff'
+    });
     res.end(data);
   });
 }).listen(PORT, '127.0.0.1', () => {
