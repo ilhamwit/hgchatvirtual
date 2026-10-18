@@ -59,6 +59,7 @@ hanya baris start di journald.
 - 2026-10-18 T-030: migrasi 3 `audit_log` (180 hari, purge per jam): login_ok/login_failed/login_throttled/logout (dengan IP) dan perubahan akun dari CLI (dengan user OS); `node scripts/users.js audit [N]`. Password yang dicoba tidak pernah disimpan. Migrasi v2→v3 diuji pada salinan DB production — done
 - 2026-10-18 Test: 8 test baru (`test/ops.test.js`), total 51 PASS; gate PASS, security 0 warning — done
 - 2026-10-18 Status → ready-for-qa. Rilis: merge → restart chat-center (migrasi 3 otomatis) → pasang timer (`bash scripts/install-backup-timer.sh`) → cek `/healthz` dan backup pertama — ready-for-qa
+- 2026-10-18 Rilis lewat `scripts/restart.sh` (user): gate PASS, PID 221120 → 240756, schema v3, `/healthz` lokal & publik `{"ok":true,"db":"ok","hermes":"ok"}`. Tersisa: pasang timer backup (menunggu OK user) — ready-for-qa
 
 ## Dependencies
 
