@@ -18,7 +18,7 @@ riwayat tersimpan di server, dan agent yang benar-benar membantu kerja tim.
 | [EPIC-002](EPIC-002-server-side-history.md)            | Phase 1 | Riwayat percakapan di server + API chat | P0       | done |
 | [EPIC-003](EPIC-003-streaming-chat-ux.md)              | Phase 2 | Streaming & UX percakapan               | P1       | backlog |
 | [EPIC-004](EPIC-004-attachments-retention.md)          | Phase 2 | Lampiran per percakapan + retensi       | P1       | backlog |
-| [EPIC-005](EPIC-005-operations.md)                     | Phase 2 | Operasional: backup, health, log        | P1       | backlog |
+| [EPIC-005](EPIC-005-operations.md)                     | Phase 2 | Operasional: backup, health, log        | P1       | ready-for-qa |
 | [EPIC-006](EPIC-006-team-agents.md)                    | Phase 3 | Agent untuk kerja tim (Backstage dll)   | P2       | backlog |
 | [EPIC-007](EPIC-007-hermes-backend.md)                 | Phase 1 | Backend agent pindah ke Hermes          | P0       | done |
 

@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Chat Center database backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+RandomizedDelaySec=10min
+# Run at the next boot if the machine was off at 03:15.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

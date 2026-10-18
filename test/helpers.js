@@ -80,6 +80,7 @@ async function startServer(users, extraEnv = {}) {
   const base = `http://127.0.0.1:${port}`;
   return {
     base, dbPath,
+    get out() { return srv.out; },   // everything the server printed so far
     stop: async () => { await srv.stop(); fs.rmSync(dir, { recursive: true, force: true }); },
     request: (p, opts = {}) => fetch(base + p, { redirect: 'manual', ...opts }),
     // JSON call as a logged-in user: returns { status, body }.

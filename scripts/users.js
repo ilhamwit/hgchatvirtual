@@ -6,7 +6,9 @@
 // Passwords are never taken as arguments (they would land in shell history):
 // they are prompted for with echo off, or read from the first line of stdin.
 const { openDb } = require('../lib/db');
+const os = require('os');
 const auth = require('../lib/auth');
+const audit = require('../lib/audit');
 
 const USAGE = `Usage: node scripts/users.js <command> [args]
 
@@ -16,6 +18,7 @@ const USAGE = `Usage: node scripts/users.js <command> [args]
   enable <username>                                  allow login again
   revoke-sessions <username>                         log the user out everywhere
   list                                               show all users
+  audit [N]                                          show the last N audit events (default 30)
 
 Database: CHAT_DB_PATH or data/chat-center.db. Pipe a password on stdin to skip the prompt.`;
 
@@ -83,6 +86,8 @@ async function main(argv) {
   const [username] = flags.positional;
   const needUser = () => { if (!username) throw new Error(`${command} needs a <username>`); };
   const db = openDb();
+  // Every account change is attributed to the OS user who ran the command.
+  const log = (event, detail) => audit.record(db, { event, username, ip: 'cli', detail: 'by ' + os.userInfo().username + (detail ? ', ' + detail : '') });
 
   switch (command) {
     case 'add': {
@@ -91,29 +96,35 @@ async function main(argv) {
         username, displayName: flags.name || username,
         password: await askPassword(), role: flags.admin ? 'admin' : 'member'
       });
+      log('user_added', user.role);
       console.log(`created ${user.role} "${user.username}" (${user.displayName})`);
       break;
     }
     case 'reset-password':
       needUser();
       await auth.setPassword(db, username, await askPassword());
+      log('password_reset');
       console.log(`password changed for "${username}"; their sessions were ended`);
       break;
     case 'disable':
       needUser();
       auth.setDisabled(db, username, true);
+      log('user_disabled');
       console.log(`disabled "${username}" and ended their sessions`);
       break;
     case 'enable':
       needUser();
       auth.setDisabled(db, username, false);
+      log('user_enabled');
       console.log(`enabled "${username}"`);
       break;
     case 'revoke-sessions': {
       needUser();
       const user = auth.getUserByUsername(db, username);
       if (!user) throw new Error(`no user "${username}"`);
-      console.log(`ended ${auth.revokeUserSessions(db, user.id)} session(s) for "${username}"`);
+      const n = auth.revokeUserSessions(db, user.id);
+      log('sessions_revoked', n + ' session(s)');
+      console.log(`ended ${n} session(s) for "${username}"`);
       break;
     }
     case 'list': {
@@ -124,6 +135,15 @@ async function main(argv) {
       const head = ['USERNAME', 'NAME', 'ROLE', 'STATUS', 'SESSIONS', 'LAST SEEN (UTC)'];
       const widths = head.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
       for (const r of [head, ...rows]) console.log(r.map((c, i) => c.padEnd(widths[i])).join('  '));
+      break;
+    }
+    case 'audit': {
+      const n = Math.min(Math.max(parseInt(username || '30', 10) || 30, 1), 1000);
+      const rows = audit.recent(db, n).reverse();
+      if (!rows.length) { console.log('no audit events yet'); break; }
+      for (const r of rows) {
+        console.log([fmtTime(r.at), r.event.padEnd(16), (r.username || '-').padEnd(12), (r.ip || '-').padEnd(15), r.detail || ''].join('  '));
+      }
       break;
     }
     default:

@@ -104,6 +104,42 @@ hermes -p budi config set API_SERVER_KEY "$(grep -oP '^HERMES_API_KEY=\K.*' ~/.c
 Restart Hermes: `systemctl --user restart hermes-gateway` (tanpa sudo;
 WhatsApp/Telegram terputus beberapa detik).
 
+## Operasional
+
+### Backup & restore
+
+`scripts/backup.js` membuat snapshot konsisten (`VACUUM INTO` dari koneksi
+read-only, aman saat server jalan), memeriksanya (`integrity_check` + jumlah
+baris), lalu menghapus backup lebih tua dari 14 hari — hanya setelah backup baru
+terbukti baik. File: `data/backups/chat-center-YYYYMMDD-HHMMSS.db` (mode 600).
+
+```bash
+node scripts/backup.js                                   # backup sekarang
+node scripts/backup.js --verify data/backups/<file>.db   # cek satu backup
+bash scripts/install-backup-timer.sh                     # pasang jadwal harian 03:15 (user unit, tanpa sudo)
+systemctl --user list-timers chat-center-backup.timer    # kapan backup berikutnya
+journalctl --user -u chat-center-backup -n 20            # hasil backup terakhir
+```
+
+Restore (manusia, butuh sudo untuk stop/start):
+
+```bash
+sudo systemctl stop chat-center
+cd "/home/hg/Documents/Chat Center"
+node scripts/backup.js --verify data/backups/<file>.db
+mkdir -p data/before-restore && mv data/chat-center.db* data/before-restore/
+cp data/backups/<file>.db data/chat-center.db && chmod 600 data/chat-center.db
+sudo systemctl start chat-center
+```
+
+### Health, log, audit
+
+- `GET /healthz` (tanpa login): `200 {"ok":true,"db":"ok","hermes":"ok"}`, atau
+  `503` bila database/Hermes bermasalah. Pakai untuk uptime monitor.
+- Log request: satu baris per request di journald, tanpa query string, cookie,
+  atau isi pesan: `journalctl -u chat-center | grep ' req '`.
+- Audit login & perubahan akun (disimpan 180 hari): `node scripts/users.js audit 50`.
+
 ## Cek kualitas
 
 ```bash

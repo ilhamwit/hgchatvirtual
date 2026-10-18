@@ -1,0 +1,10 @@
+# Daily backup of the Chat Center database (EPIC-005 T-027).
+# User unit: install with scripts/install-backup-timer.sh (no sudo needed).
+[Unit]
+Description=Chat Center database backup (VACUUM INTO, verified, 14-day retention)
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Documents/Chat Center
+ExecStart=/usr/bin/node "%h/Documents/Chat Center/scripts/backup.js"
+Nice=10

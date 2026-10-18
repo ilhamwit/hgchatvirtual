@@ -36,6 +36,10 @@ it stops being true. Durable decisions also go in the owning epic's Automation L
   Admin CLI: `node scripts/users.js`.
   `npm run dev` = dev instance on :8650 with data in `data/dev/`.
 - `npm run gates` runs qa + test (unit + boot smoke) + security.
+- Ops (EPIC-005): `scripts/backup.js` → `data/backups/` (14 days, verified),
+  daily via user unit `chat-center-backup.timer` (install script in
+  `scripts/`); `GET /healthz` is public; `req …` lines in journald; table
+  `audit_log` (migration 3, 180 days) viewed with `node scripts/users.js audit`.
 
 ## Decisions
 

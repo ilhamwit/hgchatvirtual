@@ -15,6 +15,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { openDb } = require('./lib/db');
 const auth = require('./lib/auth');
+const audit = require('./lib/audit');
 const { createGateway, DEFAULT_URL: DEFAULT_GATEWAY_URL } = require('./lib/gateway');
 const { createApi } = require('./lib/api');
 
@@ -72,7 +73,7 @@ if (auth.countActiveUsers(db) === 0) {
 }
 // 5 failed logins per 15 minutes, counted per client IP and per username.
 const loginLimiter = auth.createRateLimiter({ max: 5, windowMs: 15 * 60 * 1000 });
-setInterval(() => auth.purgeExpiredSessions(db), 60 * 60 * 1000).unref();
+setInterval(() => { auth.purgeExpiredSessions(db); audit.purge(db); }, 60 * 60 * 1000).unref();
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -234,8 +235,10 @@ function handleLogin(req, res) {
     const ipKey = 'ip:' + clientIp(req);
     const userKey = 'user:' + username;
 
+    const ip = clientIp(req);
     const wait = Math.max(loginLimiter.retryAfter(ipKey), loginLimiter.retryAfter(userKey));
     if (wait) {
+      audit.record(db, { event: 'login_throttled', username, ip });
       res.setHeader('Retry-After', String(wait));
       return sendJson(res, 429, { ok: false, error: 'too_many_attempts', retryAfter: wait });
     }
@@ -250,26 +253,57 @@ function handleLogin(req, res) {
     if (!user) {
       loginLimiter.fail(ipKey);
       loginLimiter.fail(userKey);
+      audit.record(db, { event: 'login_failed', username, ip });
       return sendJson(res, 401, { ok: false });
     }
     // Only the username's counter resets: a valid login must not clear an
     // IP's record of guessing other accounts.
     loginLimiter.reset(userKey);
     setSessionCookie(req, res, auth.createSession(db, user.id, req.headers['user-agent']));
+    audit.record(db, { event: 'login_ok', username: user.username, ip });
     sendJson(res, 200, { ok: true, user: { username: user.username, displayName: user.displayName } });
   });
 }
 
-function handleLogout(req, res) {
+function handleLogout(req, res, user) {
   req.resume();
+  if (user) audit.record(db, { event: 'logout', username: user.username, ip: clientIp(req) });
   auth.deleteSession(db, getCookie(req, COOKIE_NAME));
   setSessionCookie(req, res, '', 0);
   sendJson(res, 200, { ok: true });
 }
 
+// Public liveness check for uptime monitors (EPIC-005 T-028): 200 when the
+// database answers and Hermes is up, else 503. Reveals nothing else.
+async function handleHealth(req, res) {
+  req.resume();
+  const out = { ok: true, db: 'ok', hermes: 'ok' };
+  try { db.prepare('SELECT 1').get(); } catch (e) { out.db = 'error'; out.ok = false; }
+  try {
+    const r = await fetch(GATEWAY + '/health', { signal: AbortSignal.timeout(3000) });
+    if (!r.ok) throw new Error('status ' + r.status);
+  } catch (e) { out.hermes = 'unreachable'; out.ok = false; }
+  sendJson(res, out.ok ? 200 : 503, out);
+}
+
+// One line per request to stdout/journald (EPIC-005 T-029): method, path
+// without the query string, status, duration, user and client IP. Never
+// headers, cookies, bodies or message content. Passing health checks are
+// skipped so an uptime monitor does not flood the journal.
+function logRequest(req, res, started) {
+  res.on('finish', () => {
+    const p = req.url.split('?')[0].slice(0, 200);
+    if (p === '/healthz' && res.statusCode === 200) return;
+    const ms = Math.round(Number(process.hrtime.bigint() - started) / 1e6);
+    console.log(`req ${req.method} ${p} ${res.statusCode} ${ms}ms user=${req.hgUser || '-'} ip=${clientIp(req)}`);
+  });
+}
+
 // No CORS headers: the page and its API share one origin, and no other site
 // should be able to call this server from a browser.
 const server = http.createServer((req, res) => {
+  logRequest(req, res, process.hrtime.bigint());
+
   // Public visitors on plain http go to https first. Mixing the two breaks
   // login: a browser that once got the Secure session cookie over https
   // refuses to replace it from an http page, and never sends it over http.
@@ -281,7 +315,9 @@ const server = http.createServer((req, res) => {
   }
 
   const urlNoQuery = req.url.split('?')[0];
+  if (urlNoQuery === '/healthz' && req.method === 'GET') { handleHealth(req, res); return; }
   const user = auth.getSessionUser(db, getCookie(req, COOKIE_NAME));
+  if (user) req.hgUser = user.username;
 
   // Public: the login page itself, its credential check, and logout.
   if (urlNoQuery === '/login' && req.method === 'GET') {
@@ -294,7 +330,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (urlNoQuery === '/login' && req.method === 'POST') { handleLogin(req, res); return; }
-  if (urlNoQuery === '/logout' && req.method === 'POST') { handleLogout(req, res); return; }
+  if (urlNoQuery === '/logout' && req.method === 'POST') { handleLogout(req, res, user); return; }
 
   if (!user && !PUBLIC_PATHS.has(urlNoQuery)) {
     // API-ish routes get a JSON 401 so fetch() can report it; page loads get
