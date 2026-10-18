@@ -33,7 +33,8 @@ it stops being true. Durable decisions also go in the owning epic's Automation L
   into `wa_messages` (migration 4; offset + inode + head hash, so rotation is
   safe). Group policy in Hermes is `open` + `require_mention: true`. A Hermes
   cron `wa-group-summary` (every 6 h) already posts digests to a group —
-  separate from the web summaries. The bot's own group replies are not in the
+  separate from the web summaries. Web summaries are always written by the
+  Hermes profile `aurix` (`CHAT_WA_SUMMARY_AGENT`); users cannot pick an agent. The bot's own group replies are not in the
   archive (bridge skips fromMe in groups); they are read from Hermes'
   `state.db` (sessions source=whatsapp, chat_type=group, assistant +
   finish_reason=stop). Mentions are "@<LID>"; resolve via creds.json me.lid

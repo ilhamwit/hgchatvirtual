@@ -114,7 +114,7 @@ const api = createApi({
   mediaDir: MEDIA_DIR,
   whatsapp,
   // Group reading + summaries from Hermes' WhatsApp group archive (read only).
-  waArchive: createWaArchive({ db, gateway, agents: AGENTS })
+  waArchive: createWaArchive({ db, gateway })
 });
 
 // Keep only a basename, and only characters that are safe in a shell argument

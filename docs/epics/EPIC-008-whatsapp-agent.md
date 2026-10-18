@@ -38,7 +38,7 @@ Konteks teknis untuk nanti: Hermes sudah menjalankan WhatsApp bridge
 - [x] **T-042** Koneksikan WA — status nomor WhatsApp Hermes + pairing QR dari web ke sesi pending; pemasangan & restart Hermes lewat `scripts/wa-apply.sh` (dijalankan manusia), dengan backup dan rollback.
 - [x] **T-043** Pilih Group — daftar grup dari arsip grup bridge Hermes (nama dari bridge) → chat read-only.
 - [x] ~~**T-044** Inbox~~ — dibatalkan oleh user (2026-10-18), menu dihapus.
-- [x] **T-045** Summary Chat — grup + rentang tanggal + agent (default Dave) → ringkasan Markdown oleh agent Hermes, tersimpan dengan riwayat.
+- [x] **T-045** Summary Chat — grup + rentang tanggal → ringkasan Markdown oleh Aurix (tetap; awalnya agent pilihan, default Dave) oleh agent Hermes, tersimpan dengan riwayat.
 
 ## Acceptance Criteria
 
@@ -65,6 +65,7 @@ Konteks teknis untuk nanti: Hermes sudah menjalankan WhatsApp bridge
 - 2026-10-18 Permintaan user: sidebar tanpa dropdown — bagian "WhatsApp" berisi Pilih Group, Summary Chat (dulu "Summary Chating"), Koneksikan WA, langsung tampil seperti menu lain; Inbox dihapus (T-044 batal). Dihapus juga: grup "WhatsApp Agent" yang bisa dibuka/tutup, kartu placeholder "Segera hadir", dan CSS-nya; breadcrumb jadi "WhatsApp / …"; `#wa-inbox` lama kini kembali ke chat. Hanya frontend (tanpa restart). Test UI ditulis ulang untuk struktur baru (urutan, tanpa dropdown/Inbox/placeholder); screenshot dicek — done
 - 2026-10-18 Status → ready-for-qa: semua menu live; QA tersisa = uji ganti nomor WhatsApp sungguhan lewat Koneksikan WA + `wa-apply.sh` — ready-for-qa
 - 2026-10-18 Permintaan user "UI dirapikan" (Summary Chat): tombol keluar dari kartu (5 kolom dipaksa satu baris) → formulir jadi Grup lebar penuh + info "N pesan · data sejak … · N anggota", lalu Dari/Sampai/Agent, lalu chip rentang cepat (Hari ini / 7 hari / 30 hari, chip aktif mengikuti tanggal) + tombol di kanan; catatan keterbatasan satu baris kecil; riwayat jadi kartu yang jelas bisa diklik dengan pill status berwarna, waktu dibuat, dan panah; kartu hasil punya Salin (Markdown) + Tutup; satu kolom di layar sempit. Hanya frontend. Screenshot dicek di 1440 px dan 1000 px — done
+- 2026-10-18 Permintaan user: ringkasan tidak perlu pilih agent — selalu oleh **Aurix**. Hermes: profil `aurix` diberi `API_SERVER_KEY` yang sama (backup `.env` di `~/.hermes/backups/pre-aurix-key-20261018-235112`); langsung berlaku tanpa restart Hermes (`/p/aurix/v1/models` 401 → 200), uji balasan Aurix: "Aurix". Chat Center: agent ringkasan jadi konfigurasi server `CHAT_WA_SUMMARY_AGENT` (default `aurix`), `agentId` dari browser diabaikan, validasi agent dihapus; UI: dropdown Agent dihapus, Dari/Sampai dua kolom, keterangan "Diringkas oleh Aurix" di samping tombol; nama agent di riwayat ditampilkan "Aurix". Ringkasan lama tetap tercatat dengan agent aslinya (Dave). Test diperbarui (agent dari browser diabaikan → /p/aurix), 76 PASS — done
 
 ## Dependencies
 

@@ -163,9 +163,11 @@ membaca semua grup tempat bot berada.
 
 - **Pilih Group**: daftar grup → chat read-only (per hari, muat yang lebih lama,
   diperbarui tiap 15 dtk).
-- **Summary Chat**: grup + rentang tanggal (maks 92 hari / 5000 pesan) +
-  agent (default Dave) → diringkas oleh agent Hermes di latar belakang; rentang
-  panjang dipecah per bagian lalu digabung. Hasil tersimpan di `wa_summaries`.
+- **Summary Chat**: grup + rentang tanggal (maks 92 hari / 5000 pesan) →
+  diringkas oleh agent Hermes **Aurix** (tetap, tidak bisa dipilih; ubah lewat
+  `CHAT_WA_SUMMARY_AGENT`) di latar belakang; rentang panjang dipecah per
+  bagian lalu digabung. Hasil tersimpan di `wa_summaries`. Profil Aurix memakai
+  `API_SERVER_KEY` yang sama dengan `HERMES_API_KEY`.
 
 Balasan bot diambil (hanya-baca) dari sesi grup di `~/.hermes/state.db` karena
 bridge tidak mengarsipkannya; tampil di kanan sebagai "<nama bot> · bot". Mention

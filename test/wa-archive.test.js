@@ -36,7 +36,7 @@ test('indexing is incremental, waits for complete lines, skips junk, survives ro
   const dir = tempDir();
   const file = path.join(dir, 'archive.jsonl');
   const db = openDb(':memory:');
-  const wa = createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db, gateway: null, agents: ['dave'], archivePath: file, bridgeUrl: 'http://127.0.0.1:9' });
+  const wa = createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db, gateway: null, archivePath: file, bridgeUrl: 'http://127.0.0.1:9' });
   assert.strictEqual(wa.sync(), 0, 'no file yet');
   const a = line({ chatId: G1, ts: at(2026, 10, 18, 9), sender: 'Ana', body: 'pagi' });
   const b = line({ chatId: G1, ts: at(2026, 10, 18, 10), sender: 'Budi', body: 'halo' });
@@ -62,7 +62,7 @@ test('groups get names from the bridge (cached), newest first, with last message
     line({ chatId: G2, ts: at(2026, 10, 18, 11), sender: 'Cici', body: '', hasMedia: true, mediaType: 'image' }));
   const bridge = await fakeBridge({ [G2]: ['Tim Inti', 5] });
   const db = openDb(':memory:');
-  const wa = createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db, gateway: null, agents: ['dave'], archivePath: file, bridgeUrl: bridge.url });
+  const wa = createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db, gateway: null, archivePath: file, bridgeUrl: bridge.url });
   try {
     const g = await wa.groups();
     assert.deepStrictEqual(g.map((x) => [x.id, x.name, x.participants, x.messageCount]), [[G2, 'Tim Inti', 5, 1], [G1, null, null, 1]]);
@@ -82,7 +82,7 @@ test('messages page newest-first with hasMore, shown oldest-first', () => {
   let all = '';
   for (let i = 0; i < 250; i++) all += line({ chatId: G1, ts: at(2026, 10, 1) + i * 60000, sender: 'Ana', body: 'pesan ' + i });
   fs.writeFileSync(file, all);
-  const wa = createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db: openDb(':memory:'), gateway: null, agents: ['dave'], archivePath: file, bridgeUrl: 'http://127.0.0.1:9' });
+  const wa = createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db: openDb(':memory:'), gateway: null, archivePath: file, bridgeUrl: 'http://127.0.0.1:9' });
   const p1 = wa.messages(G1, { limit: 100 });
   assert.strictEqual(p1.messages.length, 100);
   assert.ok(p1.hasMore);
@@ -96,7 +96,7 @@ test('messages page newest-first with hasMore, shown oldest-first', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('long ranges are summarized in parts, then combined; tools and sending are forbidden', async () => {
+test('long ranges are summarized in parts, then combined, always by Aurix; tools and sending are forbidden', async () => {
   const dir = tempDir();
   const file = path.join(dir, 'archive.jsonl');
   let all = '';
@@ -106,7 +106,8 @@ test('long ranges are summarized in parts, then combined; tools and sending are 
   const gateway = { ask: async (a) => { calls.push(a); return a.conversationId.endsWith('-0') ? '## Ringkasan\nFinal' : 'catatan ' + calls.length; } };
   const db = openDb(':memory:');
   db.prepare("INSERT INTO users (id, username, display_name, password_hash, created_at) VALUES (1, 'ilham', 'Ilham', 'x', 0)").run();
-  const wa = createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db, gateway, agents: ['dave', 'joel'], archivePath: file, bridgeUrl: 'http://127.0.0.1:9', chunkChars: 400 });
+  const wa = createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db, gateway, archivePath: file, bridgeUrl: 'http://127.0.0.1:9', chunkChars: 400 });
+  // A browser-supplied agent is ignored: the summary agent is server config.
   const s = wa.createSummary({ id: 1 }, { chatId: G1, from: '2026-10-18', to: '2026-10-18', agentId: 'joel' });
   assert.strictEqual(s.status, 'running');
   assert.strictEqual(s.messageCount, 30);
@@ -117,7 +118,8 @@ test('long ranges are summarized in parts, then combined; tools and sending are 
   assert.strictEqual(done.by, 'ilham');
   const parts = calls.length - 1;
   assert.ok(parts > 1, 'more than one part');
-  assert.ok(calls.every((c) => c.agentId === 'joel'));
+  assert.ok(calls.every((c) => c.agentId === 'aurix'), 'Aurix writes every part');
+  assert.strictEqual(done.agentId, 'aurix');
   assert.deepStrictEqual(calls.map((c) => c.conversationId), [...Array(parts)].map((_, i) => `wasum-${s.id}-${i + 1}`).concat(`wasum-${s.id}-0`));
   assert.match(calls.at(-1).text, /Gabungkan menjadi satu ringkasan[\s\S]*### Catatan bagian 1/);
   for (const c of calls) assert.match(c.text, /[Jj]angan memakai tool/);
@@ -128,7 +130,7 @@ test('long ranges are summarized in parts, then combined; tools and sending are 
 test('a summary cut off by a restart is marked failed on the next start', () => {
   const db = openDb(':memory:');
   db.prepare("INSERT INTO wa_summaries (chat_id, from_ts, to_ts, agent_id, status, created_at) VALUES (?, 0, 1, 'dave', 'running', 0)").run(G1);
-  createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db, gateway: null, agents: ['dave'], archivePath: '/nonexistent', bridgeUrl: 'http://127.0.0.1:9' });
+  createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db, gateway: null, archivePath: '/nonexistent', bridgeUrl: 'http://127.0.0.1:9' });
   const r = db.prepare('SELECT status, error FROM wa_summaries').get();
   assert.strictEqual(r.status, 'error');
   assert.match(r.error, /restart/);
@@ -161,13 +163,12 @@ test('API: groups and read-only messages for any logged-in user; summaries via H
       assert.strictEqual(r.status, 400, JSON.stringify(body));
       assert.match(r.body.error, re);
     };
-    await bad({ agentId: 'main' }, /agent tidak dikenal/);
     await bad({ from: '2026-13-01' }, /YYYY-MM-DD/);
     await bad({ from: '2026-10-19' }, /sebelum tanggal awal/);
     await bad({ from: '2026-01-01' }, /maksimal 92 hari/);
     await bad({ from: '2026-10-10', to: '2026-10-12' }, /tidak ada pesan/);
 
-    // One day only: just "hari ini" goes to Hermes, as the chosen agent.
+    // One day only: just "hari ini" goes to Hermes — always as Aurix, whatever the browser asks.
     mode = { delayMs: 300, json: { choices: [{ message: { role: 'assistant', content: '## Ringkasan\nBudi menyapa.' } }] } };
     const created = await srv.json(cookie, 'POST', '/api/wa/summaries', { chatId: G1, from: '2026-10-18', to: '2026-10-18', agentId: 'nana' });
     assert.strictEqual(created.status, 202);
@@ -182,12 +183,12 @@ test('API: groups and read-only messages for any logged-in user; summaries via H
     assert.strictEqual(s.status, 'done');
     assert.strictEqual(s.content, '## Ringkasan\nBudi menyapa.');
     const call = gw.calls.at(-1);
-    assert.strictEqual(call.path, '/p/nana/v1/chat/completions');
+    assert.strictEqual(call.path, '/p/aurix/v1/chat/completions');
     assert.strictEqual(call.headers['x-hermes-session-id'], `hgchat-wasum-${s.id}-0`);
     assert.match(call.body.messages[0].content, /Budi: hari ini/);
     assert.doesNotMatch(call.body.messages[0].content, /kemarin/);
     const list = (await srv.json(cookie, 'GET', `/api/wa/summaries?chatId=${encodeURIComponent(G1)}`)).body.summaries;
-    assert.deepStrictEqual(list.map((x) => [x.from, x.to, x.agentId, x.by, x.status]), [['2026-10-18', '2026-10-18', 'nana', 'cahyo', 'done']]);
+    assert.deepStrictEqual(list.map((x) => [x.from, x.to, x.agentId, x.by, x.status]), [['2026-10-18', '2026-10-18', 'aurix', 'cahyo', 'done']]);
   } finally {
     await srv.stop();
     await gw.close();
@@ -230,7 +231,7 @@ test("the bot's group replies come from Hermes' sessions, incrementally, and onl
   const archivePath = path.join(dir, 'archive.jsonl');
   fs.writeFileSync(archivePath, line({ chatId: G1, ts: at(2026, 10, 18, 8, 59), sender: 'Ana', body: 'halo bot' }));
   const db = openDb(':memory:');
-  const wa = createWaArchive({ db, gateway: null, agents: ['dave'], archivePath, bridgeUrl: 'http://127.0.0.1:9', hermesStateDb: stateDb, sessionDir: fakeSession(dir) });
+  const wa = createWaArchive({ db, gateway: null, archivePath, bridgeUrl: 'http://127.0.0.1:9', hermesStateDb: stateDb, sessionDir: fakeSession(dir) });
   assert.strictEqual(wa.sync(), 2, 'one member message + one final bot reply');
   const page = wa.messages(G1).messages;
   assert.deepStrictEqual(page.map((m) => [m.sender, m.body, m.fromMe]), [['Ana', 'halo bot', false], ['Rederp', 'Jawaban bot', true]]);
@@ -247,7 +248,7 @@ test('"@<lid>" mentions show names: the bot, mapped members, unknown left as is'
     line({ chatId: G1, ts: at(2026, 10, 18, 9), sender: 'Cahyo Febrianto', senderNumber: '628122000', body: 'hai semua' }) +
     line({ chatId: G1, ts: at(2026, 10, 18, 10), sender: 'Ana', body: '@110935482048547 tolong cek, cc @20714795057374 dan @99999999999' }));
   const db = openDb(':memory:');
-  const wa = createWaArchive({ db, gateway: null, agents: ['dave'], archivePath, bridgeUrl: 'http://127.0.0.1:9', hermesStateDb: '/nonexistent', sessionDir: fakeSession(dir) });
+  const wa = createWaArchive({ db, gateway: null, archivePath, bridgeUrl: 'http://127.0.0.1:9', hermesStateDb: '/nonexistent', sessionDir: fakeSession(dir) });
   const page = wa.messages(G1).messages;
   assert.strictEqual(page[1].body, '@Rederp tolong cek, cc @Cahyo Febrianto dan @99999999999');
   fs.rmSync(dir, { recursive: true, force: true });

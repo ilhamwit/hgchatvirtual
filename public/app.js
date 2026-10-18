@@ -958,7 +958,6 @@ async function waSummaryOpen() {
   }
   const today = waIsoDay(new Date());
   const opts = waS.groups.map((g) => `<option value="${escapeAttr(g.id)}">${escapeHtml(waGroupName(g))}</option>`).join('');
-  const agentOpts = AGENTS.map((a) => `<option value="${a.id}"${a.id === 'dave' ? ' selected' : ''}>${escapeHtml(a.name)} — ${escapeHtml(a.role)}</option>`).join('');
   el.innerHTML = `<div class="wa-grid">
     <div class="wa-box">
       <h3>Buat ringkasan percakapan grup</h3>
@@ -969,7 +968,6 @@ async function waSummaryOpen() {
         </label>
         <label>Dari<input type="date" id="wasFrom" max="${today}" onchange="waMarkRange()"></label>
         <label>Sampai<input type="date" id="wasTo" value="${today}" max="${today}" onchange="waMarkRange()"></label>
-        <label>Agent<select id="wasAgent">${agentOpts}</select></label>
       </div>
       <div class="was-actions">
         <div class="was-chips" role="group" aria-label="Rentang cepat">
@@ -977,7 +975,8 @@ async function waSummaryOpen() {
           <button type="button" data-days="7" onclick="waQuickRange(7)">7 hari</button>
           <button type="button" data-days="30" onclick="waQuickRange(30)">30 hari</button>
         </div>
-        <button class="wa-btn primary" type="button" id="wasGo" onclick="waCreateSummary()">Buat ringkasan</button>
+        <div class="was-go"><span class="was-by">Diringkas oleh <b>Aurix</b></span>
+          <button class="wa-btn primary" type="button" id="wasGo" onclick="waCreateSummary()">Buat ringkasan</button></div>
       </div>
       <p class="was-note">${escapeHtml(WA_LIMITS_NOTE)}</p>
     </div>
@@ -1027,7 +1026,11 @@ const WA_STATUS = {
   done: ['ok', 'Selesai'], running: ['run', 'Diproses'], error: ['bad', 'Gagal']
 };
 
-function waAgentName(id) { return (AGENTS.find((a) => a.id === id) || { name: id }).name; }
+// Summaries are written by Aurix (a Hermes profile that is not in AGENTS).
+function waAgentName(id) {
+  const a = AGENTS.find((x) => x.id === id);
+  return a ? a.name : String(id || '').charAt(0).toUpperCase() + String(id || '').slice(1);
+}
 
 async function waLoadSummaryHistory() {
   const chatId = document.getElementById('wasGroup').value;
@@ -1054,8 +1057,7 @@ async function waCreateSummary() {
     const r = await api('POST', '/api/wa/summaries', {
       chatId: document.getElementById('wasGroup').value,
       from: document.getElementById('wasFrom').value,
-      to: document.getElementById('wasTo').value,
-      agentId: document.getElementById('wasAgent').value
+      to: document.getElementById('wasTo').value
     });
     waShowSummary(r.summary.id);
     waLoadSummaryHistory();
