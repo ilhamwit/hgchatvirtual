@@ -18,6 +18,7 @@ const auth = require('./lib/auth');
 const audit = require('./lib/audit');
 const { createGateway, DEFAULT_URL: DEFAULT_GATEWAY_URL } = require('./lib/gateway');
 const { createApi } = require('./lib/api');
+const { createWhatsApp } = require('./lib/whatsapp');
 
 // Fail fast on bad config. Production (systemd) must provide the Hermes
 // API key; CHAT_DEV=1 is the explicit opt-out for local UI work. See .env.example.
@@ -95,11 +96,20 @@ const ALLOWED_EXT = new Set([
   'png','jpg','jpeg','gif','webp','bmp','heic'
 ]);
 
+// WhatsApp pairing for the "Koneksikan WA" page. It only pairs into a staging
+// session; installing it (and restarting Hermes) is scripts/wa-apply.sh, run
+// by a person. Pairing ends after the request that started it, so its audit
+// entries name the user who started it and carry "web" instead of an IP.
+const whatsapp = createWhatsApp({
+  onEvent: (event, username, detail) => audit.record(db, { event, username, ip: 'web', detail })
+});
+
 const api = createApi({
   db,
   gateway: createGateway({ url: GATEWAY, key: HERMES_API_KEY }),
   agents: AGENTS,
-  mediaDir: MEDIA_DIR
+  mediaDir: MEDIA_DIR,
+  whatsapp
 });
 
 // Keep only a basename, and only characters that are safe in a shell argument
@@ -380,3 +390,8 @@ const server = http.createServer((req, res) => {
   console.log(`Chat Center server running at http://127.0.0.1:${PORT} (Hermes ${GATEWAY}, agents ${AGENTS.join(', ')})`);
   if (DEV) console.log('CHAT_DEV=1: development mode' + (HERMES_API_KEY ? '' : ' (no Hermes key)'));
 });
+
+// A pairing bridge runs in its own process group; don't leave it behind.
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, () => { whatsapp.shutdown(); process.exit(0); });
+}

@@ -20,6 +20,14 @@ it stops being true. Durable decisions also go in the owning epic's Automation L
   `X-Hermes-Session-Id: hgchat-<conversationId>`; Hermes keeps the transcript,
   so each turn sends only the new message. Conversations from before EPIC-007
   had OpenClaw sessions (`user: hgchat:<id>`); their context does not carry over.
+- WhatsApp: Hermes' WhatsApp (Baileys bridge, bot mode) belongs to the
+  *default* profile; bridge on 127.0.0.1:3010, session
+  `~/.hermes/whatsapp/session`. The Koneksikan WA page pairs into
+  `session.pending` via `bridge.js --pair-only --pair-json`; installing it is
+  `scripts/wa-apply.sh` (human-run: stop gateway, swap with `.bak-<time>`,
+  start, verify, roll back on failure). The web must never control
+  hermes-gateway — the owner chose this design after the auto-mode
+  classifier refused web-triggered restarts (2026-10-18).
 - OpenClaw is retired: `openclaw-gateway` (user service) was stopped and disabled
   on 2026-10-18 because it polled the same Telegram bots as Hermes.
 - The browser never reaches Hermes: `lib/api.js` (/api/*) stores messages in

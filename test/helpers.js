@@ -41,7 +41,10 @@ function runServer(env, { timeoutMs = 5000 } = {}) {
   const child = spawn(process.execPath, [SERVER], {
     env: {
       PATH: process.env.PATH, HOME: home, CHAT_MEDIA_DIR: home,
-      CHAT_DB_PATH: path.join(home, 'test.db'), CHAT_HERMES_URL: NO_GATEWAY, ...env
+      CHAT_DB_PATH: path.join(home, 'test.db'), CHAT_HERMES_URL: NO_GATEWAY,
+      // WhatsApp: never the real Hermes session, bridge or install.
+      CHAT_HERMES_HOME: home, CHAT_WA_SESSION_DIR: path.join(home, 'wa', 'session'), CHAT_WA_BRIDGE_URL: NO_GATEWAY,
+      ...env
     }
   });
   let out = '';

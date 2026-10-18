@@ -515,3 +515,34 @@ body{font-family:var(--font);background:var(--dark);color:#fff;}
 .wa-card-title{font-family:'Playfair Display',serif;font-size:21px;font-weight:600;color:#111118;margin:0 0 8px;}
 .wa-desc{font-size:13px;line-height:1.6;color:#5A5A72;margin:0 0 6px;}
 .wa-note{font-size:11.5px;color:#9898B2;margin:0;}
+
+/* ── Koneksikan WA (EPIC-008 T-042) ── */
+.wa-page{flex:1;overflow:auto;padding:22px;background:#F6F6F9;}
+.wa-page .wa-grid{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}
+.wa-box{background:#fff;border:1px solid #E4E4EE;border-radius:14px;padding:18px 20px;}
+.wa-box h3{margin:0 0 12px;font-size:13px;font-weight:700;color:#111118;}
+.wa-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.wa-num{font-size:20px;font-weight:700;color:#111118;letter-spacing:.3px;}
+.wa-sub{font-size:12px;color:#5A5A72;margin-top:2px;}
+.wa-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:600;}
+.wa-pill::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;}
+.wa-pill.ok{background:rgba(22,163,74,.1);color:#15803D;}
+.wa-pill.warn{background:rgba(234,88,12,.1);color:#C2410C;}
+.wa-pill.bad{background:rgba(220,38,38,.1);color:#B91C1C;}
+.wa-btn{border:none;border-radius:9px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:var(--font);}
+.wa-btn.primary{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#1A1206;}
+.wa-btn.ghost{background:#F1F1F6;color:#3A3A52;}
+.wa-btn:disabled{opacity:.5;cursor:default;}
+.wa-pair{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap;}
+.wa-qr{width:240px;height:240px;flex-shrink:0;border:1px solid #E4E4EE;border-radius:12px;padding:8px;background:#fff;display:flex;align-items:center;justify-content:center;}
+.wa-qr svg{width:100%;height:100%;}
+.wa-steps{flex:1;min-width:220px;font-size:12.5px;color:#3A3A52;line-height:1.7;margin:0;padding-left:18px;}
+.wa-hint{font-size:11.5px;color:#9898B2;margin-top:10px;}
+.wa-msg{font-size:12.5px;color:#5A5A72;}
+.wa-msg.err{color:#B91C1C;}
+.wa-ready{border-color:rgba(201,168,76,.55);background:linear-gradient(180deg,rgba(201,168,76,.08),#fff 60%);}
+.wa-cmd{display:flex;align-items:center;gap:8px;margin-top:10px;background:#111118;color:#F5DFA0;border-radius:9px;padding:10px 12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;overflow:auto;}
+.wa-cmd code{flex:1;white-space:nowrap;}
+.wa-cmd button{flex-shrink:0;background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer;}
+.wa-spin{width:16px;height:16px;border:2px solid #E4E4EE;border-top-color:var(--gold);border-radius:50%;animation:waSpin .8s linear infinite;display:inline-block;vertical-align:middle;margin-right:8px;}
+@keyframes waSpin{to{transform:rotate(360deg);}}

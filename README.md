@@ -132,6 +132,27 @@ cp data/backups/<file>.db data/chat-center.db && chmod 600 data/chat-center.db
 sudo systemctl start chat-center
 ```
 
+### WhatsApp Hermes (Koneksikan WA)
+
+Halaman **WhatsApp Agent → Koneksikan WA** menampilkan nomor WhatsApp yang
+dipakai Hermes (profil `default`, bridge di 127.0.0.1:3010) dan bisa memasangkan
+nomor baru lewat QR. Semua user yang login boleh memulai pairing; setiap langkah
+masuk audit log (`wa_pair_*`, `wa_number_changed`).
+
+1. Klik **Scan QR nomor baru**, scan dari HP nomor baru (WhatsApp → Perangkat
+   tertaut → Tautkan perangkat). Nomor lama tetap melayani selama ini; pairing
+   ditulis ke `~/.hermes/whatsapp/session.pending`.
+2. Pasang di terminal (me-restart Hermes, WhatsApp & Telegram putus ±10–20 dtk):
+   ```bash
+   bash "/home/hg/Documents/Chat Center/scripts/wa-apply.sh"
+   ```
+   Skrip menampilkan nomor lama → baru, minta konfirmasi, menyimpan sesi lama ke
+   `session.bak-<waktu>`, memasang yang baru, menyalakan Hermes, dan memastikan
+   bridge tersambung sebagai nomor baru. Gagal → nomor lama dipulihkan otomatis.
+3. Hapus perangkat "Hermes Agent" dari Perangkat tertaut di HP nomor lama.
+
+Web tidak pernah menghentikan/me-restart Hermes sendiri; itu hanya `wa-apply.sh`.
+
 ### Health, log, audit
 
 - `GET /healthz` (tanpa login): `200 {"ok":true,"db":"ok","hermes":"ok"}`, atau

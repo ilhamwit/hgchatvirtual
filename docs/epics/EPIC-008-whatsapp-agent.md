@@ -34,7 +34,7 @@ Konteks teknis untuk nanti: Hermes sudah menjalankan WhatsApp bridge
 
 ### Fitur (detail menyusul dari user)
 
-- [ ] **T-042** Koneksikan WA — _detail menyusul._
+- [x] **T-042** Koneksikan WA — status nomor WhatsApp Hermes + pairing QR dari web ke sesi pending; pemasangan & restart Hermes lewat `scripts/wa-apply.sh` (dijalankan manusia), dengan backup dan rollback.
 - [ ] **T-043** Pilih Group — _detail menyusul._
 - [ ] **T-044** Inbox — _detail menyusul._
 - [ ] **T-045** Summary Chating — _detail menyusul._
@@ -55,6 +55,8 @@ Konteks teknis untuk nanti: Hermes sudah menjalankan WhatsApp bridge
 - 2026-10-18 Epic dibuat atas permintaan user: menu WhatsApp Agent + 4 submenu, kerangka dulu; detail fitur menyusul — on-progress
 - 2026-10-18 T-041: grup sidebar "WhatsApp Agent" (di atas Tools, bisa dibuka/tutup, chevron, aria-expanded) dengan 4 submenu → halaman placeholder (breadcrumb, ikon, badge "Segera hadir", deskripsi singkat) yang menggantikan panel riwayat + chat; `#wa-connect|groups|inbox|summary` dibuka lagi saat reload; "Chat & Discussion", menu lain, atau memilih agent kembali ke chat (turn yang sedang berjalan tetap tersimpan di server). Hanya frontend (`public/`), tidak perlu restart. 4 test wiring (`test/ui.test.js`), total 55 PASS. Belum dilihat di browser oleh agent (tidak ada browser di server) — done
 - 2026-10-18 T-042..T-045 menunggu penjelasan detail dari user — on-progress
+- 2026-10-18 T-042 Koneksikan WA — permintaan user: pairing QR WhatsApp Hermes dari web, termasuk ganti nomor. Riset: WhatsApp Hermes milik profil default (bot mode, bridge :3010, sesi ~/.hermes/whatsapp/session); bridge punya mode `--pair-only --pair-json` (dipakai dashboard Hermes, yang tidak berjalan); Hermes tidak punya operasi ganti nomor (start pairing dengan creds lama = langsung "connected"). Desain pertama (web me-restart hermes-gateway) DITOLAK classifier keamanan (Production Deploy / Interfere With Workloads); user memilih desain aman — info
+- 2026-10-18 T-042 implementasi: `lib/whatsapp.js` (status bridge + akun dari creds.json, pairing ke staging `session.pairing-*` → `session.pending` setelah scan, QR → SVG memakai encoder qrcode-terminal milik bridge Hermes, satu pairing sekaligus, kedaluwarsa 3 menit, batal, bersih-bersih staging saat start, proses pairing dihentikan saat server berhenti); API `GET /api/wa/status`, `POST/DELETE /api/wa/pair` (semua user login, keputusan user); audit `wa_pair_started|scanned|cancelled|failed`. `scripts/wa-apply.sh` (manusia): tampilkan lama→baru, konfirmasi (EOF = tidak), stop gateway, sesi lama → `.bak-<waktu>`, pasang baru, start, tunggu bridge connected sebagai akun baru (90 dtk), rollback otomatis bila gagal, audit `wa_number_changed|wa_apply_failed`. UI: kartu nomor aktif + status bridge, kartu "nomor baru siap" + perintah + tombol Salin, area QR + langkah scan, Batal; polling 2 dtk saat pairing. Juga: `hashchange` diikuti (back/forward). 12 test baru dengan bridge/systemctl/health palsu (2 bug ditemukan & diperbaiki: prompt EOF keluar diam-diam; cwd bridge), total 67 PASS. Screenshot UI via Chromium bawaan Hermes (sandbox, bridge palsu): menu, QR, nomor siap — tampil benar. Belum: uji scan sungguhan oleh user — implemented
 
 ## Dependencies
 

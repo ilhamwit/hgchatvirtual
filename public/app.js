@@ -678,12 +678,18 @@ function openWaPage(key) {
   document.getElementById('socketsPanel').classList.add('hidden');
   document.querySelector('.chat').classList.add('hidden');
   document.getElementById('waView').classList.remove('hidden');
+  // Pages with a real feature replace the "Segera hadir" card.
+  const real = key === 'connect';
+  document.getElementById('waBody').classList.toggle('hidden', real);
+  document.getElementById('waConnect').classList.toggle('hidden', !real);
+  if (real) waConnectOpen(); else waConnectClose();
   if (location.hash !== '#wa-' + key) history.replaceState(null, '', '#wa-' + key);
 }
 
 function showChatView() {
   if (!waPage) return;
   waPage = null;
+  waConnectClose();
   document.getElementById('waView').classList.add('hidden');
   document.getElementById('socketsPanel').classList.remove('hidden');
   document.querySelector('.chat').classList.remove('hidden');
@@ -691,11 +697,115 @@ function showChatView() {
   if (location.hash.startsWith('#wa-')) history.replaceState(null, '', location.pathname + location.search);
 }
 
+/* ── Koneksikan WA (EPIC-008 T-042) ───────
+   Shows the number Hermes uses, and pairs a new one by QR. Installing the new
+   number restarts Hermes, so that last step is a command a person runs:
+   the page shows it once a QR has been scanned. */
+let waTimer = null;
+let waBusy = false;
+const WA_LIVE = new Set(['starting', 'waiting', 'scanned']);
+
+// "6281299990000" -> "+62 812-9999-0000" (Indonesian grouping: 3-4-rest).
+function waPhone(p) {
+  if (!p) return '—';
+  const d = String(p);
+  if (!d.startsWith('62')) return '+' + d;
+  const rest = d.slice(2);
+  return '+62 ' + [rest.slice(0, 3), rest.slice(3, 7), rest.slice(7)].filter(Boolean).join('-');
+}
+
+function waConnectOpen() {
+  waConnectClose();
+  const tick = async () => {
+    let s = null;
+    try { s = await api('GET', '/api/wa/status'); } catch (e) { s = { error: e.message }; }
+    if (waPage !== 'connect') return;
+    renderWaConnect(s);
+    const fast = s && s.pairing && WA_LIVE.has(s.pairing.status);
+    waTimer = setTimeout(tick, fast ? 2000 : 10000);
+  };
+  tick();
+}
+
+function waConnectClose() {
+  clearTimeout(waTimer);
+  waTimer = null;
+}
+
+async function waAction(method) {
+  if (waBusy) return;
+  waBusy = true;
+  try { await api(method, '/api/wa/pair'); }
+  catch (e) { showToast('⚠️ ' + e.message); }
+  finally { waBusy = false; waConnectOpen(); }
+}
+
+function copyWaCmd(btn) {
+  const text = btn.parentElement.querySelector('code').textContent;
+  const done = () => { btn.textContent = 'Tersalin'; setTimeout(() => { btn.textContent = 'Salin'; }, 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, () => {});
+}
+
+function renderWaConnect(s) {
+  const el = document.getElementById('waConnect');
+  if (!s || s.error) {
+    el.innerHTML = `<div class="wa-grid"><div class="wa-box"><div class="wa-msg err">Gagal memuat status WhatsApp: ${escapeHtml((s && s.error) || 'tidak ada respons')}</div></div></div>`;
+    return;
+  }
+  const p = s.pairing || { status: 'idle' };
+  const pill = s.bridge === 'connected' ? '<span class="wa-pill ok">Terhubung</span>'
+    : s.bridge === 'disconnected' ? '<span class="wa-pill warn">Terputus</span>'
+    : '<span class="wa-pill bad">Bridge tidak merespons</span>';
+  const live = s.account
+    ? `<div><div class="wa-num">${escapeHtml(waPhone(s.account.phone))}</div><div class="wa-sub">${escapeHtml(s.account.name || 'Tanpa nama')} · profil Hermes <b>${escapeHtml(s.profile)}</b></div></div>`
+    : '<div><div class="wa-num">Belum ada nomor</div><div class="wa-sub">Hermes belum terhubung ke WhatsApp mana pun.</div></div>';
+
+  let ready = '';
+  if (s.pending) {
+    ready = `<div class="wa-box wa-ready"><h3>Nomor baru siap dipasang</h3>
+      <div class="wa-num">${escapeHtml(waPhone(s.pending.phone))}</div>
+      <div class="wa-sub">${escapeHtml(s.pending.name || 'Tanpa nama')}</div>
+      <p class="wa-msg" style="margin:12px 0 0">Langkah terakhir dijalankan di terminal server karena me-restart Hermes (WhatsApp &amp; Telegram terputus ±10–20 detik). Nomor lama tetap aktif sampai perintah ini dijalankan:</p>
+      <div class="wa-cmd"><code>${escapeHtml(s.applyCommand)}</code><button type="button" onclick="copyWaCmd(this)">Salin</button></div></div>`;
+  }
+
+  let pair;
+  if (p.status === 'starting') {
+    pair = `<div class="wa-msg"><span class="wa-spin"></span>Menyiapkan QR…</div>`;
+  } else if (p.status === 'waiting') {
+    pair = `<div class="wa-pair"><div class="wa-qr">${p.qrSvg || '<span class="wa-msg err">QR tidak bisa digambar</span>'}</div>
+      <ol class="wa-steps"><li>Buka <b>WhatsApp</b> di HP nomor yang ingin dipakai.</li><li>Ketuk <b>⋮ / Setelan → Perangkat tertaut</b>.</li><li>Ketuk <b>Tautkan perangkat</b>, lalu arahkan kamera ke QR ini.</li>
+      <li style="list-style:none;margin-left:-18px" class="wa-hint">QR diperbarui otomatis ±20 detik sekali dan kedaluwarsa setelah 3 menit. Dimulai oleh ${escapeHtml(p.startedBy || '-')}.</li></ol></div>`;
+  } else if (p.status === 'scanned') {
+    pair = `<div class="wa-msg"><span class="wa-spin"></span>QR terpindai — menyimpan kredensial…</div>`;
+  } else {
+    const note = p.status === 'error' ? `<div class="wa-msg err" style="margin-bottom:12px">${escapeHtml(p.error)}</div>`
+      : p.status === 'expired' ? '<div class="wa-msg" style="margin-bottom:12px">QR kedaluwarsa. Mulai lagi bila perlu.</div>'
+      : p.status === 'cancelled' ? '<div class="wa-msg" style="margin-bottom:12px">Pairing dibatalkan. Nomor lama tidak berubah.</div>' : '';
+    pair = note + `<p class="wa-msg" style="margin:0 0 12px">Nomor yang aktif tetap melayani selama proses ini. Setelah QR dipindai, nomor baru baru dipasang lewat satu perintah di terminal.</p>
+      <button class="wa-btn primary" type="button" onclick="waAction('POST')">${s.account || s.pending ? 'Scan QR nomor baru' : 'Hubungkan WhatsApp'}</button>`;
+  }
+  const cancel = WA_LIVE.has(p.status) && p.status !== 'scanned'
+    ? '<button class="wa-btn ghost" type="button" style="margin-top:14px" onclick="waAction(\'DELETE\')">Batal</button>' : '';
+
+  el.innerHTML = `<div class="wa-grid">
+    <div class="wa-box"><h3>Nomor WhatsApp Hermes</h3><div class="wa-row">${live}<div style="margin-left:auto">${pill}</div></div></div>
+    ${ready}
+    <div class="wa-box"><h3>${s.account ? 'Ganti nomor' : 'Hubungkan nomor'}</h3>${pair}${cancel}</div>
+  </div>`;
+}
+
 // A reload on #wa-inbox (etc.) reopens that page.
 function openWaFromHash() {
   const m = location.hash.match(/^#wa-(\w+)$/);
   if (m && WA_PAGES[m[1]]) openWaPage(m[1]);
 }
+
+// Back/forward or an edited address: follow the hash.
+window.addEventListener('hashchange', () => {
+  if (/^#wa-\w+$/.test(location.hash)) openWaFromHash();
+  else showChatView();
+});
 
 renderDrop();renderSb();
 refreshConvs().then(() => switchAgent('dave')).then(openWaFromHash).then(importOldHistory);
