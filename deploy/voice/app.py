@@ -346,6 +346,14 @@ async def entrypoint(ctx: JobContext):
         await http.close()
     ctx.add_shutdown_callback(_close)
 
+    # When the caller hangs up, end the job now instead of waiting ~20 s for
+    # the room to close: the process holds ~4.7 GB of GPU until it exits, and
+    # a quick redial would otherwise run the card out of memory.
+    @session.on("close")
+    def _on_session_close(ev):
+        logger.info("call ended (%s); releasing the process", getattr(ev, "reason", ""))
+        ctx.shutdown(reason="call ended")
+
     greeting = f"(Panggilan suara baru dimulai.) Sapa {person} dengan hangat dan singkat sebagai dirimu sendiri, lalu tanyakan apa yang bisa dibantu."
     agent = HermesAgent(agent_id, session_id, greeting)
     await session.start(agent=agent, room=ctx.room)
