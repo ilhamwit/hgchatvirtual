@@ -220,33 +220,46 @@ class HermesAgent(Agent):
             await stream.close()
 
     async def tts_node(self, text, model_settings):
-        """The default TTS node, plus FLUSH: speak the buffered sentence now
-        instead of waiting for the next one (used by the filler line)."""
+        """The default TTS node, split at FLUSH: the text before it (the filler
+        line) is synthesized in its own TTS stream and played at once; the
+        answer then continues in a fresh stream. One stream per segment, never
+        stream.flush(): with the sentence StreamAdapter a flush made everything
+        after it go silent."""
         activity = self._get_activity_or_raise()
         conn_options = activity.session.conn_options.tts_conn_options
-        async with activity.tts.stream(conn_options=conn_options) as stream:
+        source = text.__aiter__()
+        finished = False
+        while not finished:
+            async with activity.tts.stream(conn_options=conn_options) as stream:
 
-            async def forward():
-                async for chunk in text:
-                    if FLUSH in chunk:
-                        rest = chunk.replace(FLUSH, "")
-                        if rest:
-                            stream.push_text(rest)
-                        stream.flush()
-                    else:
+                async def forward():
+                    nonlocal finished
+                    while True:
+                        try:
+                            chunk = await source.__anext__()
+                        except StopAsyncIteration:
+                            finished = True
+                            break
+                        if FLUSH in chunk:
+                            rest = chunk.replace(FLUSH, "")
+                            if rest:
+                                stream.push_text(rest)
+                            break
                         stream.push_text(chunk)
-                stream.end_input()
+                    stream.end_input()
 
-            task = asyncio.create_task(forward())
-            try:
-                async for ev in stream:
-                    yield ev.frame
-            finally:
-                task.cancel()
+                task = asyncio.create_task(forward())
                 try:
+                    async for ev in stream:
+                        yield ev.frame
                     await task
-                except BaseException:
-                    pass
+                finally:
+                    if not task.done():
+                        task.cancel()
+                        try:
+                            await task
+                        except BaseException:
+                            pass
 
     async def transcription_node(self, text, model_settings):
         async for delta in text:
@@ -317,8 +330,9 @@ async def entrypoint(ctx: JobContext):
             # Local end-of-turn model (the cloud one needs LiveKit Cloud keys).
             turn_detection=inference.TurnDetector(version="v1-mini"),
             # Wait a little after the person stops; longer when the model thinks
-            # the sentence is not finished.
-            endpointing={"min_delay": float(os.getenv("VOICE_MIN_DELAY", "0.4")),
+            # the sentence is not finished. Whisper's transcript lands ~0.4 s after
+            # speech ends; a shorter wait commits half a sentence.
+            endpointing={"min_delay": float(os.getenv("VOICE_MIN_DELAY", "0.55")),
                          "max_delay": float(os.getenv("VOICE_MAX_DELAY", "2.5"))},
             # Only real speech interrupts the agent; a cough or "hmm" does not,
             # and a false interruption resumes the answer.
