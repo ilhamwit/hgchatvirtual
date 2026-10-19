@@ -34,6 +34,7 @@ from livekit.agents import (
     tokenize,
 )
 from livekit.plugins import silero
+from livekit.plugins import openai as lk_openai
 from custom_tts.OmniVoicePlugin import OmniVoicePlugin
 from custom_tts.PiperTTSPluginLocal import PiperTTSPlugin
 from custom_stt.FasterWhisperPlugin import FasterWhisperSTT
@@ -94,9 +95,10 @@ class HermesAgent(Agent):
     """Sends only the newest message to Hermes: Hermes keeps the transcript
     (X-Hermes-Session-Id), exactly like the text chat does."""
 
-    def __init__(self, agent_id: str, session_id: str):
+    def __init__(self, agent_id: str, session_id: str, greeting: str):
         super().__init__(instructions=VOICE_RULES)
         self.agent_id = agent_id
+        self.greeting = greeting
         self.client = AsyncOpenAI(
             base_url=f"{HERMES_URL}/p/{agent_id}/v1", api_key=HERMES_API_KEY or "none",
             default_headers={"X-Hermes-Session-Id": session_id}, timeout=240.0, max_retries=0,
@@ -104,12 +106,13 @@ class HermesAgent(Agent):
         self.turns = 0
 
     async def llm_node(self, chat_ctx, tools, model_settings):
+        # The person's newest words; before they have said anything, the greeting.
         last = None
         for item in reversed(chat_ctx.items):
-            if getattr(item, "type", "") == "message" and item.role in ("user", "system"):
+            if getattr(item, "type", "") == "message" and item.role == "user":
                 last = item
                 break
-        text = (last.text_content if last is not None else "") or "Halo"
+        text = ((last.text_content if last is not None else "") or "").strip() or self.greeting
         # The rules go with the first turn (Hermes remembers them), then a short reminder.
         prefix = VOICE_RULES if self.turns == 0 else "[Mode suara: jawab lisan, singkat, tanpa markdown]"
         self.turns += 1
@@ -179,7 +182,14 @@ async def entrypoint(ctx: JobContext):
     stt_instance = ctx.proc.userdata.get("stt") or create_stt()
     tts_instance = create_tts(meta.get("voiceProfile"), meta.get("voiceDesign"))
 
+    # AgentSession refuses to generate without an LLM registered, even though
+    # HermesAgent.llm_node does the talking; this one points at the same
+    # Hermes profile and is never called directly.
+    hermes_llm = lk_openai.LLM(model=agent_id, base_url=f"{HERMES_URL}/p/{agent_id}/v1", api_key=HERMES_API_KEY or "none",
+                               extra_headers={"X-Hermes-Session-Id": session_id})
+
     session = AgentSession(
+        llm=hermes_llm,
         vad=vad,
         stt=stt.StreamAdapter(stt=stt_instance, vad=vad),
         tts=tts.StreamAdapter(tts=tts_instance, sentence_tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=18, stream_context_len=6)),
@@ -205,9 +215,10 @@ async def entrypoint(ctx: JobContext):
         await http.close()
     ctx.add_shutdown_callback(_close)
 
-    agent = HermesAgent(agent_id, session_id)
+    greeting = f"(Panggilan suara baru dimulai.) Sapa {person} dengan hangat dan singkat sebagai dirimu sendiri, lalu tanyakan apa yang bisa dibantu."
+    agent = HermesAgent(agent_id, session_id, greeting)
     await session.start(agent=agent, room=ctx.room)
-    await session.generate_reply(instructions=f"Sapa {person} dengan hangat dan singkat sebagai dirimu sendiri, lalu tanyakan apa yang bisa dibantu.")
+    await session.generate_reply()
 
 
 if __name__ == "__main__":
