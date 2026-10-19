@@ -8,7 +8,7 @@ area: Frontend
 retries: 0
 prd: ../product/PRD.md
 stories: US-VO-1 … US-VO-2
-tasks: T-107 … T-110
+tasks: T-107 … T-111
 
 ## Goal
 
@@ -43,11 +43,18 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   scroll/pinch untuk zoom, tombol ⟲ ⟳ ＋ － ⌂; klik setelah menggeser diabaikan;
   ponsel: skala lebih besar, chip agent di bawah; `prefers-reduced-motion`.
 
+- T-111 Chat di dalam Virtual Office (pemilik: "interaksi chatnya jangan pindah
+  page"): klik agent membuka panel chat di kanan (bottom sheet di ponsel), ruangan
+  tetap terlihat. Percakapan sama dengan halaman chat (`activeConv`, `convs`,
+  `pending`): kirim, sesi baru, stop, polling bila koneksi putus, tombol ↗ ke
+  halaman chat untuk lampiran/riwayat sesi. Balasan muncul juga sebagai gelembung
+  di atas kepala agent selama 9 dtk.
+
 ## Acceptance Criteria
 
 - Given menu Virtual Office, When dibuka, Then kelima agent tampil di mejanya.
-- Given seorang agent, When diklik (wajah, meja, atau chip), Then chat dengan
-  agent itu terbuka.
+- Given seorang agent, When diklik (wajah, meja, atau chip), Then panel chat
+  dengan agent itu terbuka di Virtual Office tanpa pindah halaman.
 - Given pesan saya sedang dijawab agent, Then mejanya menandai sedang membalas.
 
 ## Automation Log
@@ -59,6 +66,12 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   `test/office.test.js` (adegan dirender di sandbox `vm`: satu meja per agent,
   escape nama, slot maks 6, 5 sisi per kotak, billboard membatalkan rotasi
   kamera) + tes UI menu/registry. Tes 148/148, gates PASS.
+
+- 2026-10-19 T-111: panel chat di kantor. Diuji dengan Hermes tiruan lokal
+  (balas 2,5 dtk, tanpa model) di instance uji: panel terbuka dengan riwayat yang
+  sama, status "sedang membalas" (titik mengetik, tombol stop, gelembung di meja),
+  balasan tampil di panel dan sebagai gelembung 3D; ponsel = bottom sheet. Tes
+  baru: klik tidak pindah halaman, isi pesan di-escape. Tes 149/149, gates PASS.
 
 ## Dependencies
 

@@ -192,4 +192,5 @@ test('virtual office: menu under the agents, page slot, registry, script', () =>
   assert.match(js, /office: \{ title: 'Virtual Office', crumb: 'Agents', hash: 'office' \}/);
   assert.match(js, /office: \{ el: 'officePage', open: \(\) => voOpen\(\), close: \(\) => voClose\(\) \}/);
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{\.vo \*\{animation:none !important;\}\}/);
+  assert.match(css, /\.vo\.chatting \.vo-stage\{right:400px;\}/, 'the chat panel sits beside the room');
 });

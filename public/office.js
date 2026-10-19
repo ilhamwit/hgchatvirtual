@@ -12,6 +12,8 @@ const VO = {
   W: 1100, D: 820, H: 240,          // room size
   rz: 40, rx: 58, zoom: 1,          // camera: turn, tilt, zoom
   timer: null, onResize: null,
+  chat: null,                       // { agentId, convId, seq } while the chat panel is open
+  sayTimers: {},
   ptr: new Map(), drag: null, dragged: false, pinch: null,
 };
 const VO_LIMITS = { rz: [8, 82], rx: [40, 70], zoom: [0.55, 2.4] };
@@ -92,7 +94,7 @@ function voDesk(a, i) {
     + voBox(x + 110, y + 120, 66, 8, 18, 20, c, 'vo-body')
     + voSprite(x + 95, y + 128, 88, 64, 64, 'vo-head', `<span class="vo-head-in"><img src="${a.img}" alt=""></span>`)
     + voSprite(x + 95, y + 128, 160, 120, 26, 'vo-name', `<span>${escapeHtml(a.name)}</span>`)
-    + voSprite(x + 95, y + 128, 190, 170, 30, 'vo-bubble', '<span>✍️ sedang membalas…</span>')
+    + voSprite(x + 95, y + 128, 190, 240, 90, 'vo-bubble', '<span class="vo-say"></span><span class="vo-wait">✍️ sedang membalas…</span>')
     + '</div>';
 }
 
@@ -189,6 +191,7 @@ function voOpen() {
     </div>
     <div class="vo-card hidden" id="voCard"></div>
     <div class="vo-chips">${chips}</div>
+    <aside class="vo-chat hidden" id="voChat" aria-label="Chat dengan agent"></aside>
   </div>`;
   const stage = document.getElementById('voStage');
   stage.addEventListener('pointerdown', voDown);
@@ -199,21 +202,27 @@ function voOpen() {
   stage.addEventListener('click', (e) => { if (VO.dragged) { e.stopPropagation(); e.preventDefault(); VO.dragged = false; } }, true);
   VO.onResize = () => voApply();
   window.addEventListener('resize', VO.onResize);
+  document.addEventListener('keydown', voKey);
   voApply();
   voStatus();
+  if (VO.chat) voChatOpen(VO.chat.agentId);
   VO.timer = setInterval(voStatus, 1500);
 }
 
 function voClose() {
   clearInterval(VO.timer); VO.timer = null;
+  document.removeEventListener('keydown', voKey);
+  Object.values(VO.sayTimers).forEach(clearTimeout); VO.sayTimers = {};
   if (VO.onResize) window.removeEventListener('resize', VO.onResize);
   VO.onResize = null; VO.ptr.clear(); VO.drag = null; VO.pinch = null;
 }
 
+// Clicking an agent opens the chat right here in the office.
 function voPick(id) {
   if (VO.dragged) return;
-  switchAgent(id);
+  voChatOpen(id);
 }
+function voKey(e) { if (e.key === 'Escape' && VO.chat && !document.querySelector('.cfm:not(.hidden), .fv:not(.hidden)')) voChatClose(); }
 
 function voHover(id, on) {
   document.querySelectorAll(`#officePage [data-agent="${CSS.escape(id)}"]`).forEach((n) => n.classList.toggle('hot', on));
@@ -235,8 +244,12 @@ function voStatus() {
   if (waPage !== 'office') return;
   for (const a of AGENTS) {
     const busy = voBusy(a.id);
-    document.querySelectorAll(`#officePage [data-agent="${CSS.escape(a.id)}"]`).forEach((n) => n.classList.toggle('busy', busy));
+    document.querySelectorAll(`#officePage [data-agent="${CSS.escape(a.id)}"]`).forEach((n) => {
+      n.classList.toggle('busy', busy);
+      n.classList.toggle('talk', !!VO.chat && VO.chat.agentId === a.id);
+    });
   }
+  voChatButtons();
 }
 
 /* ── Camera ── */
@@ -295,4 +308,206 @@ function voUp(e) {
 function voWheel(e) {
   e.preventDefault();
   voZoom(Math.exp(-e.deltaY * 0.0015));
+}
+
+/* ── Chat inside the office ──────────────────────────────────────────────
+   The same conversations as the chat page (activeConv, convs, pending), so a
+   chat started here continues there and the other way round. */
+
+const voAgent = (id) => AGENTS.find((a) => a.id === id);
+const voConvPending = () => !!(VO.chat && VO.chat.convId && pending[VO.chat.convId]);
+
+function voChatOpen(id) {
+  const a = voAgent(id);
+  const box = document.getElementById('voChat');
+  if (!a || !box) return;
+  const seq = (VO.chat && VO.chat.seq || 0) + 1;
+  VO.chat = { agentId: id, convId: convIdFor(id), seq };
+  document.querySelector('#officePage .vo').classList.add('chatting');
+  box.classList.remove('hidden');
+  box.style.setProperty('--ac', VO_COLOR[id] || 'var(--gold)');
+  box.innerHTML = `<div class="vo-chat-h">
+      <img src="${a.img}" alt=""><div class="vo-chat-t"><b>${escapeHtml(a.name)}</b><span id="voChatSub">${escapeHtml(a.role)} · di mejanya</span></div>
+      <button type="button" class="vo-ib" onclick="voChatNew()" title="Sesi chat baru" aria-label="Sesi chat baru"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+      <button type="button" class="vo-ib" onclick="voChatFull()" title="Buka di halaman chat (lampiran, riwayat sesi)" aria-label="Buka di halaman chat"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+      <button type="button" class="vo-ib" onclick="voChatClose()" title="Tutup (Esc)" aria-label="Tutup chat"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+    </div>
+    <div class="vo-msgs" id="voMsgs"></div>
+    <form class="vo-compose" onsubmit="event.preventDefault();voSend()">
+      <textarea id="voTa" rows="1" placeholder="Tulis pesan ke ${escapeAttr(a.name)}…" onkeydown="voTaKey(event)" oninput="voGrow(this)"></textarea>
+      <button type="submit" class="vo-send" id="voSend" title="Kirim" aria-label="Kirim"></button>
+    </form>`;
+  voStatus();
+  voApply();
+  voChatLoad(seq);
+  if (!isMobile()) setTimeout(() => { const t = document.getElementById('voTa'); if (t) t.focus(); }, 50);
+}
+
+function voChatClose() {
+  VO.chat = null;
+  const box = document.getElementById('voChat');
+  if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
+  const vo = document.querySelector('#officePage .vo');
+  if (vo) vo.classList.remove('chatting');
+  voStatus();
+  voApply();
+}
+
+// The full chat page: attachments, session list, voice.
+function voChatFull() {
+  const id = VO.chat && VO.chat.agentId;
+  if (!id) return;
+  if (VO.chat.convId) activeConv[id] = VO.chat.convId;
+  VO.chat = null;
+  switchAgent(id);
+}
+
+function voChatNew() {
+  if (!VO.chat) return;
+  activeConv[VO.chat.agentId] = null;
+  VO.chat.convId = null;
+  voChatRender([], false);
+  const t = document.getElementById('voTa'); if (t) t.focus();
+}
+
+async function voChatLoad(seq) {
+  const c = VO.chat;
+  if (!c) return;
+  if (!c.convId) { voChatRender([], false); return; }
+  document.getElementById('voMsgs').innerHTML = '<div class="vo-msg-note"><span class="wa-spin"></span>Memuat percakapan…</div>';
+  let data;
+  try { data = await api('GET', '/api/conversations/' + c.convId + '/messages'); }
+  catch (e) {
+    if (!VO.chat || VO.chat.seq !== seq) return;
+    if (e.status === 404) { activeConv[c.agentId] = null; c.convId = null; voChatRender([], false); return; }
+    document.getElementById('voMsgs').innerHTML = `<div class="vo-msg-note err">Gagal memuat percakapan: ${escapeHtml(e.message)}</div>`;
+    return;
+  }
+  if (!VO.chat || VO.chat.seq !== seq) return;
+  if (data.pending) pending[c.convId] = true; else delete pending[c.convId];
+  voChatRender(data.messages, !!data.pending);
+  if (data.pending) voChatPoll(c.convId, seq);
+}
+
+function voMsgHtml(m) {
+  const a = voAgent(VO.chat.agentId);
+  const time = m.createdAt ? fmtTime(m.createdAt) : now();
+  if (m.role === 'user') return `<div class="vo-m me"><div class="vo-mb">${escapeHtml(m.content || '').replace(/\n/g, '<br>')}${renderMsgAtt(m.attachments)}</div><time>${time}</time></div>`;
+  if (m.role === 'assistant') return `<div class="vo-m"><img src="${a.img}" alt=""><div><div class="vo-mb">${formatMsg(m.content || '')}</div><time>${time}</time></div></div>`;
+  return `<div class="vo-m"><img src="${a.img}" alt=""><div><div class="vo-mb err">⚠️ ${escapeHtml(m.content || 'Gagal')}</div><time>${time}</time></div></div>`;
+}
+
+function voChatRender(messages, waiting) {
+  const box = document.getElementById('voMsgs');
+  if (!box || !VO.chat) return;
+  const a = voAgent(VO.chat.agentId);
+  const starters = ['Halo! Apa saja yang bisa kamu bantu?', 'Ada update apa hari ini?', 'Bantu saya susun daftar tugas minggu ini.'];
+  box.innerHTML = messages.length || waiting ? messages.map(voMsgHtml).join('') + (waiting ? voTypingHtml() : '')
+    : `<div class="vo-empty"><img src="${a.img}" alt=""><b>Ngobrol dengan ${escapeHtml(a.name)}</b><span>${escapeHtml(a.sub || a.role)}</span>
+        <div class="vo-starters">${starters.map((t) => `<button type="button" onclick="voQuick(this.textContent)">${escapeHtml(t)}</button>`).join('')}</div></div>`;
+  box.scrollTop = box.scrollHeight;
+  voChatButtons();
+}
+const voTypingHtml = () => `<div class="vo-m" id="voTyping"><img src="${voAgent(VO.chat.agentId).img}" alt=""><div class="vo-mb vo-dots"><i></i><i></i><i></i></div></div>`;
+
+function voAppend(m) {
+  const box = document.getElementById('voMsgs');
+  if (!box) return;
+  const empty = box.querySelector('.vo-empty'); if (empty) empty.remove();
+  const typing = document.getElementById('voTyping');
+  if (typing) typing.insertAdjacentHTML('beforebegin', voMsgHtml(m)); else box.insertAdjacentHTML('beforeend', voMsgHtml(m));
+  box.scrollTop = box.scrollHeight;
+}
+function voTyping(on) {
+  const box = document.getElementById('voMsgs');
+  const t = document.getElementById('voTyping');
+  if (on && !t && box) { box.insertAdjacentHTML('beforeend', voTypingHtml()); box.scrollTop = box.scrollHeight; }
+  if (!on && t) t.remove();
+}
+
+function voChatButtons() {
+  const btn = document.getElementById('voSend');
+  if (!btn) return;
+  const busy = voConvPending();
+  btn.classList.toggle('stop', busy);
+  btn.title = busy ? 'Hentikan' : 'Kirim';
+  btn.setAttribute('aria-label', btn.title);
+  btn.innerHTML = busy ? STOP_ICON : SEND_ICON;
+  const sub = document.getElementById('voChatSub');
+  const a = VO.chat && voAgent(VO.chat.agentId);
+  if (sub && a) sub.textContent = a.role + (busy ? ' · sedang membalas…' : ' · di mejanya');
+}
+
+function voTaKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); voSend(); }
+}
+function voGrow(ta) { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'; }
+function voQuick(text) { const ta = document.getElementById('voTa'); if (ta) { ta.value = text; voSend(); } }
+
+async function voSend() {
+  const c = VO.chat;
+  if (!c) return;
+  if (voConvPending()) { api('POST', '/api/conversations/' + c.convId + '/stop').catch(() => {}); return; }
+  const ta = document.getElementById('voTa');
+  const text = ta.value.trim();
+  if (!text) return;
+  const agentId = c.agentId, seq = c.seq;
+  if (!c.convId) {
+    try {
+      const data = await api('POST', '/api/conversations', { agentId });
+      c.convId = data.conversation.id;
+      activeConv[agentId] = c.convId;
+      convs.unshift(data.conversation);
+    } catch (e) { showToast('⚠️ Gagal membuat percakapan: ' + e.message); return; }
+  }
+  const convId = c.convId;
+  ta.value = ''; voGrow(ta);
+  voAppend({ role: 'user', content: text });
+  pending[convId] = true;
+  voTyping(true); voStatus(); renderHistoryPanel();
+  const here = () => VO.chat && VO.chat.seq === seq && VO.chat.convId === convId;
+  try {
+    const data = await api('POST', '/api/conversations/' + convId + '/messages', { text, attachments: [] });
+    delete pending[convId];
+    const r = data.reply;
+    if (here()) { voTyping(false); voAppend(r); }
+    if (r.role === 'assistant') voSay(agentId, r.content);
+    else if (!here()) showToast('⚠️ ' + voAgent(agentId).name + ': ' + r.content);
+  } catch (err) {
+    if (err.status === 400 || err.status === 404) {
+      delete pending[convId];
+      if (here()) { voTyping(false); voAppend({ role: 'error', content: err.message }); }
+    } else {
+      // 409 (still answering) or a lost connection: the server finishes the turn.
+      voChatPoll(convId, seq);
+      return;
+    }
+  } finally { voStatus(); }
+  refreshConvs();
+}
+
+// Waits for a turn that is still running on the server, then redraws.
+async function voChatPoll(convId, seq) {
+  for (;;) {
+    await wait(3000);
+    if (waPage !== 'office') return;
+    let data;
+    try { data = await api('GET', '/api/conversations/' + convId); } catch (e) { if (e.status === 404) break; continue; }
+    if (!data.conversation.pending) break;
+  }
+  delete pending[convId];
+  await refreshConvs();
+  if (VO.chat && VO.chat.seq === seq && VO.chat.convId === convId) voChatLoad(seq);
+  voStatus();
+}
+
+// The reply also shows as a speech bubble over the agent's head for a while.
+function voSay(id, text) {
+  const desk = document.querySelector(`#officePage .vo-desk[data-agent="${CSS.escape(id)}"]`);
+  if (!desk) return;
+  const plain = String(text || '').replace(/[*_`#>]+/g, '').replace(/\s+/g, ' ').trim();
+  desk.querySelector('.vo-say').textContent = plain.length > 110 ? plain.slice(0, 108) + '…' : plain;
+  desk.classList.add('said');
+  clearTimeout(VO.sayTimers[id]);
+  VO.sayTimers[id] = setTimeout(() => desk.classList.remove('said'), 9000);
 }

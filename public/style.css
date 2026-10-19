@@ -1437,9 +1437,15 @@ img.ds-avi{object-fit:cover;background:#F4F4F8;border:1.5px solid rgba(201,168,7
 .vo-desk.hot .vo-head-in{scale:1.14;}
 .vo-name span{background:rgba(17,17,24,.84);color:#fff;font-size:12px;font-weight:700;padding:3px 10px;border-radius:12px;white-space:nowrap;}
 .vo-desk.hot .vo-name span{background:var(--ac);color:#111118;}
-.vo-bubble{opacity:0;transition:opacity .2s;}
-.vo-desk.busy .vo-bubble{opacity:1;}
-.vo-bubble span{position:relative;background:#fff;color:#3A3A52;font-size:12px;font-weight:600;padding:5px 11px;border-radius:12px;white-space:nowrap;box-shadow:0 6px 16px rgba(0,0,0,.16);animation:voBob 1.6s ease-in-out infinite;}
+.vo-bubble{opacity:0;transition:opacity .25s;}
+.vo-desk.busy .vo-bubble,.vo-desk.said .vo-bubble{opacity:1;}
+.vo-bubble span{position:relative;background:#fff;color:#3A3A52;font-size:12px;font-weight:600;padding:6px 11px;border-radius:12px;box-shadow:0 6px 16px rgba(0,0,0,.16);}
+.vo-bubble span::after{content:'';position:absolute;left:50%;bottom:-5px;margin-left:-5px;border:5px solid transparent;border-bottom:0;border-top-color:#fff;}
+.vo-wait{white-space:nowrap;animation:voBob 1.6s ease-in-out infinite;display:none;}
+.vo-desk.busy .vo-wait{display:block;}
+.vo-say{display:none;max-width:230px;font-weight:500 !important;line-height:1.4;text-align:left;display:none;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+.vo-desk.said:not(.busy) .vo-say{display:-webkit-box;}
+.vo-desk.talk .vo-ring{opacity:.95;}
 
 /* overlay: title, camera, hover card, agent chips */
 .vo-hud{position:absolute;left:16px;right:16px;top:14px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;pointer-events:none;}
@@ -1468,6 +1474,46 @@ img.ds-avi{object-fit:cover;background:#F4F4F8;border:1.5px solid rgba(201,168,7
 .vo-chip.busy .vo-dot{background:var(--gold);animation:voBlink 1s infinite;}
 .vo-chip:hover,.vo-chip.hot,.vo-chip:focus-visible{background:#fff;border-color:var(--ac);outline:none;}
 
+/* chat inside the office: a panel on the right (bottom sheet on a phone) */
+.vo.chatting .vo-stage{right:400px;}
+.vo.chatting .vo-chips{left:calc(50% - 200px);}
+.vo.chatting .vo-card{right:416px;}
+.vo-chat{position:absolute;top:0;right:0;bottom:0;width:400px;display:flex;flex-direction:column;background:#fff;border-left:1px solid #E4E4EE;box-shadow:-12px 0 32px rgba(0,0,0,.08);z-index:5;}
+.vo-chat-h{display:flex;align-items:center;gap:10px;padding:10px 10px 10px 14px;border-bottom:1px solid #EAEAEF;border-top:3px solid var(--ac);}
+.vo-chat-h img{width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid var(--ac);flex-shrink:0;}
+.vo-chat-t{flex:1;min-width:0;display:flex;flex-direction:column;}
+.vo-chat-t b{font-size:14px;color:#111118;}
+.vo-chat-t span{font-size:11.5px;color:#9898B2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.vo-ib{width:34px;height:34px;flex-shrink:0;border:none;background:none;border-radius:9px;color:#5A5A72;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.vo-ib:hover{background:#F1F1F6;color:#111118;}
+.vo-msgs{flex:1;overflow-y:auto;padding:14px 14px 8px;display:flex;flex-direction:column;gap:12px;background:#FAFAFC;}
+.vo-m{display:flex;gap:8px;align-items:flex-end;max-width:92%;}
+.vo-m img{width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;}
+.vo-m>div{min-width:0;}
+.vo-m.me{align-self:flex-end;flex-direction:column;align-items:flex-end;max-width:85%;}
+.vo-mb{background:#fff;border:1px solid #EAEAEF;border-radius:14px 14px 14px 4px;padding:9px 12px;font-size:13px;line-height:1.55;color:#1F1F2B;overflow-wrap:anywhere;}
+.vo-m.me .vo-mb{background:#1C1A14;border-color:#1C1A14;color:#F5DFA0;border-radius:14px 14px 4px 14px;}
+.vo-mb.err{background:#FEF2F2;border-color:#FECACA;color:#991B1B;}
+.vo-mb p{margin:0 0 6px;} .vo-mb p:last-child{margin:0;}
+.vo-mb ul,.vo-mb ol{margin:4px 0;padding-left:18px;}
+.vo-m time{display:block;font-size:10px;color:#9898B2;margin-top:3px;padding:0 4px;}
+.vo-dots{display:flex;gap:4px;padding:12px 14px;}
+.vo-dots i{width:6px;height:6px;border-radius:50%;background:#C9C9D6;animation:voBlink 1s infinite;}
+.vo-dots i:nth-child(2){animation-delay:.2s;} .vo-dots i:nth-child(3){animation-delay:.4s;}
+.vo-msg-note{margin:auto;font-size:12.5px;color:#9898B2;display:flex;align-items:center;gap:8px;}
+.vo-msg-note.err{color:#B91C1C;}
+.vo-empty{margin:auto;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 10px;}
+.vo-empty img{width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid var(--ac);margin-bottom:6px;}
+.vo-empty b{font-size:15px;color:#111118;}
+.vo-empty span{font-size:12.5px;color:#5A5A72;max-width:280px;}
+.vo-starters{display:flex;flex-direction:column;gap:6px;margin-top:10px;width:100%;max-width:300px;}
+.vo-starters button{border:1px solid #E4E4EE;background:#fff;border-radius:10px;padding:8px 12px;font-size:12.5px;color:#3A3A52;cursor:pointer;font-family:var(--font);text-align:left;}
+.vo-starters button:hover{border-color:var(--ac);color:#111118;}
+.vo-compose{display:flex;gap:8px;align-items:flex-end;padding:10px 12px calc(12px + env(safe-area-inset-bottom));border-top:1px solid #EAEAEF;background:#fff;}
+.vo-compose textarea{flex:1;min-width:0;resize:none;border:1.5px solid #E4E4EE;border-radius:12px;padding:9px 12px;font-size:13px;line-height:1.45;font-family:var(--font);color:#111118;max-height:120px;outline:none;background:#F7F7FA;}
+.vo-compose textarea:focus{border-color:var(--ac);background:#fff;}
+.vo-send{width:40px;height:40px;flex-shrink:0;border:none;border-radius:12px;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#1A1206;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.vo-send.stop{background:#111118;color:#fff;}
 @keyframes voBlink{50%{opacity:.25;}}
 @keyframes voScan{to{top:100%;}}
 @keyframes voPulse{50%{opacity:.25;}}
@@ -1479,4 +1525,8 @@ img.ds-avi{object-fit:cover;background:#F4F4F8;border:1.5px solid rgba(201,168,7
   .vo-card{display:none;}
   .vo-chips{left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));transform:none;max-width:none;}
   .vo-chip small{display:none;}
+  .vo-chat{top:auto;left:0;width:auto;height:64%;border-left:none;border-radius:16px 16px 0 0;box-shadow:0 -12px 32px rgba(0,0,0,.14);}
+  .vo-chat-h{border-radius:16px 16px 0 0;}
+  .vo.chatting .vo-stage{right:0;bottom:64%;}
+  .vo.chatting .vo-chips,.vo.chatting .vo-hud .vo-title{display:none;}
 }

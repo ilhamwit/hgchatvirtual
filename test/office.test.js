@@ -13,6 +13,8 @@ function load(agents) {
     escapeHtml: (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`),
     escapeAttr: (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`),
     Date, Math, Number, Array, String, Object,
+    formatMsg: (t) => '<p>' + String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`) + '</p>',
+    fmtTime: () => '10.00', now: () => '10.00', renderMsgAtt: () => '',
   };
   vm.createContext(ctx);
   vm.runInContext(src, ctx);
@@ -45,4 +47,15 @@ test('a box has five faces and a billboard undoes the camera rotation', () => {
   assert.strictEqual((box.match(/<i class="vo-[tfkrl]"/g) || []).length, 5);
   assert.ok(box.includes('transform:translateZ(30px)') && box.includes('transform:translateZ(60px)'));
   assert.ok(ctx.voSprite(0, 0, 0, 10, 10, 'x').includes('rotateZ(calc(var(--rz) * -1)) rotateX(calc(var(--rx) * -1))'));
+});
+
+test('chat in the office: clicking an agent opens the panel here, messages are escaped', () => {
+  assert.match(src, /function voPick\(id\) \{\n  if \(VO\.dragged\) return;\n  voChatOpen\(id\);\n\}/, 'no page switch');
+  const ctx = load(AG);
+  vm.runInContext("VO.chat = { agentId: 'joel', convId: 'c1', seq: 1 };", ctx);
+  const mine = ctx.voMsgHtml({ role: 'user', content: '<img src=x onerror=alert(1)>\nbaris dua' });
+  assert.ok(!mine.includes('<img src=x'), 'user text escaped');
+  assert.ok(mine.includes('<br>baris dua'), 'line breaks kept');
+  assert.ok(ctx.voMsgHtml({ role: 'assistant', content: 'hai' }).includes('<img src="/assets/joel.png"'), 'agent face on replies');
+  assert.ok(ctx.voMsgHtml({ role: 'error', content: '<b>x</b>' }).includes('class="vo-mb err">⚠️ &#60;b&#62;'), 'errors escaped');
 });
