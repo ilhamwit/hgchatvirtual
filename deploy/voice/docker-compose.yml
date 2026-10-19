@@ -22,17 +22,20 @@ services:
     image: ghcr.io/zakie0161/realtime-voice-assistant:latest
     container_name: chat-center-voice
     env_file: .env
+    # Host networking: Hermes (8642) and Chat Center (8643) listen on
+    # 127.0.0.1 only, which a bridge-network container cannot reach. The
+    # worker publishes no ports; its health server is bound to 127.0.0.1.
+    network_mode: host
     environment:
-      - LIVEKIT_URL=ws://livekit:7890
-      - HERMES_URL=http://host.docker.internal:8642
-      - CHAT_CENTER_URL=http://host.docker.internal:8643
+      - LIVEKIT_URL=ws://127.0.0.1:7890
+      - HERMES_URL=http://127.0.0.1:8642
+      - CHAT_CENTER_URL=http://127.0.0.1:8643
+      - WORKER_PORT=8093
       - PIPER_BINARY=/opt/piper/piper
       - PIPER_MODEL=/opt/piper/models/id_ID-news_tts-medium.onnx
       - HOME=/root
       - HF_HOME=/host-cache/huggingface
       - NUM_IDLE_PROCESSES=${NUM_IDLE_PROCESSES:-0}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - ./app.py:/app/app.py:ro                       # our worker, over Reddie's
       - ${AURIX_KIT:-/home/hg/aurix-kit}/voices:/app/voices:ro
@@ -48,7 +51,6 @@ services:
               capabilities: [gpu]
     depends_on: [livekit]
     restart: unless-stopped
-    networks: [voice-net]
 
 volumes:
   whisper_cache:

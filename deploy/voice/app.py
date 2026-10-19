@@ -42,9 +42,9 @@ from custom_stt.FasterWhisperPlugin import FasterWhisperSTT
 logger = logging.getLogger("chat-center.voice")
 
 AGENT_NAME = os.getenv("AGENT_NAME", "hg-voice")
-HERMES_URL = os.getenv("HERMES_URL", "http://host.docker.internal:8642").rstrip("/")
+HERMES_URL = os.getenv("HERMES_URL", "http://127.0.0.1:8642").rstrip("/")
 HERMES_API_KEY = os.getenv("HERMES_API_KEY", "")
-CHAT_CENTER_URL = os.getenv("CHAT_CENTER_URL", "http://host.docker.internal:8643").rstrip("/")
+CHAT_CENTER_URL = os.getenv("CHAT_CENTER_URL", "http://127.0.0.1:8643").rstrip("/")
 VOICE_KEY = os.getenv("CHAT_CENTER_VOICE_KEY", "")
 AGENT_IDS = [a.strip() for a in os.getenv("CHAT_AGENTS", "dave,jaden,joel,dylan,nana").split(",") if a.strip()]
 
@@ -155,6 +155,8 @@ async def post_turn(http: aiohttp.ClientSession, conversation_id: str, role: str
 
 server = AgentServer(
     setup_fnc=setup,
+    host="127.0.0.1",                       # health server stays local (host network)
+    port=int(os.getenv("WORKER_PORT", "8093")),
     num_idle_processes=int(os.getenv("NUM_IDLE_PROCESSES", "0")),
     initialize_process_timeout=120.0,
     shutdown_process_timeout=2.0,
