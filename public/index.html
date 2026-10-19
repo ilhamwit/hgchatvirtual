@@ -103,9 +103,9 @@
         <div id="sbAgents"></div>
       </div>
       <div class="sb-foot">
-        <div class="sb-user" onclick="logout()" title="Keluar dari HG Chat">
+        <div class="sb-user" onclick="openWaPage('profile')" title="Profil, notifikasi, dan keluar">
           <div class="sb-uavi"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-          <div class="sb-uinfo"><div class="sb-uname" id="sbUname">…</div><div class="sb-ustatus" id="sbUstatus">Keluar</div></div>
+          <div class="sb-uinfo"><div class="sb-uname" id="sbUname">…</div><div class="sb-ustatus" id="sbUstatus">Profil &amp; notifikasi</div></div>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
         </div>
         <div class="sb-ver">HG Chat AI Agent &nbsp;·&nbsp; v1.0</div>
@@ -189,6 +189,8 @@
       <!-- Pilih Group (T-043) and Summary Chat (T-045): drawn by app.js -->
       <div class="wa-page wa-full hidden" id="waGroupsPage"></div>
       <div class="wa-page hidden" id="waSummaryPage"></div>
+      <!-- Profil & notifikasi (EPIC-012 stage 3), drawn by app.js -->
+      <div class="wa-page hidden" id="profilePage"></div>
       <!-- Chat & Discussion (EPIC-012): channels + DMs, drawn by app.js -->
       <div class="wa-page wa-full hidden" id="discussPage"></div>
       <!-- Task Focus (EPIC-010): my focus + team board, drawn by app.js -->

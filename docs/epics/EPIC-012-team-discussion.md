@@ -1,6 +1,6 @@
 # EPIC-012: Chat & Discussion — Ruang Diskusi Tim
 
-status: on-progress
+status: ready-for-qa
 environment: dev
 phase: 2
 priority: P1
@@ -52,8 +52,8 @@ Keputusan pemilik (2026-10-19, menyetujui usulan):
 
 ### Tahap 3 — notifikasi
 
-- [ ] **T-075** Notifikasi browser saat di-@sebut / DM.
-- [ ] **T-076** Notifikasi WhatsApp untuk @sebut / DM (perlu nomor per user).
+- [x] **T-075** Notifikasi browser saat di-@sebut / DM.
+- [x] **T-076** Notifikasi WhatsApp untuk @sebut / DM (perlu nomor per user).
 
 ## Acceptance Criteria
 
@@ -77,6 +77,7 @@ Keputusan pemilik (2026-10-19, menyetujui usulan):
 - 2026-10-19 Tahap 2 selesai (T-072…T-074). Skema v8: `room_messages.agent_id`. @dave/@jaden/@joel/@dylan/@nana (daftar `CHAT_AGENTS`, maks 3 per pesan) → agent menjawab di utas pesan itu; konteks = utas (atau 25 pesan terakhir channel) dengan nama, waktu, dan path lampiran; sesi Hermes `room-<ruang>-<pesan>-<agent>`; indikator "sedang menulis jawaban" lewat stream; jawaban menyebut si penanya (dapat @); gagal → pesan ⚠️ dari agent. Di DM juga bisa, tetap hanya untuk kedua anggota. "✨ Ringkas" (24 jam/7/30 hari) oleh Aurix sebagai job latar (di-poll), hanya terlihat oleh peminta, bisa "Bagikan" sebagai pesan Aurix (sekali). Aksi pesan ✅ Jadikan tugas (judul baris pertama, penanggung jawab = orang yang disebut, catatan = sumber pesan) dan 🗓️ Buat acara (form Schedule terisi). Tes 108/108 (4 baru + 1 UI), gates PASS, screenshot sandbox (indikator mengetik, jawaban Dave di utas, dialog ringkasan, form tugas, form acara).
 - 2026-10-19 Restart oleh agent: PID 793962 → 805290, gates PASS, `/healthz` ok, skema v8 — tahap 2 live. Di production sudah ada 4 ruang dan 2 pesan dari tim; stream real-time lewat Cloudflare dengan akun asli belum dikonfirmasi pemilik.
 - 2026-10-19 Permintaan pemilik: istilah "utas" kurang familiar → di UI dan pesan server diganti "thread" (Thread, Balas di thread, Memuat thread, dll.). Catatan epic ini tetap memakai "utas" = thread.
+- 2026-10-19 Tahap 3 selesai (T-075, T-076); pemilik menyetujui usulan (WA untuk @sebut/DM/jawaban agent; jeda 5 menit + jam tenang 21–07, bisa diubah per orang; verifikasi kode lewat WA; tanpa web push). Browser: notifikasi desktop + bunyi untuk @sebut/DM/jawaban agent saat tidak sedang melihat percakapan itu, klik membuka ruang/thread, jumlah belum dibaca di judul tab, ajakan "Aktifkan" di Chat & Discussion. Skema v9: `user_profiles` (nomor terverifikasi, kode ter-hash, batas 3 kode/jam & 5 percobaan, pengaturan) + `notify_queue`. `lib/notify.js`: antre saat pesan dibuat (hanya bila nomor terverifikasi & aktif), worker 30 dtk: lewati bila sudah dibaca/dihapus, tunggu sampai 30 menit bila Chat Center terbuka, jam tenang (WIB) → ditahan sampai pagi, digabung satu pesan per orang (maks 5 baris), maks 6 pesan/jam, gagal → coba ulang lalu error. Kirim lewat bridge `POST /send` ke `<nomor>@s.whatsapp.net` (allowlist bridge hanya untuk pesan masuk, jadi balasan ke bot tidak diproses). Halaman **Profil & notifikasi** (klik nama di sidebar; tombol Keluar pindah ke sana). Audit: `profile_wa_verified`, `profile_wa_removed`. Tes 117/117 (8 baru + 1 UI), gates PASS, screenshot sandbox (kode terkirim ke bridge palsu, verifikasi, notifikasi browser tercatat, judul tab "(9)"). Semua tugas epic selesai → ready-for-qa.
 
 ## Dependencies
 

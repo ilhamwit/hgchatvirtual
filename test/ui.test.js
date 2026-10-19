@@ -101,3 +101,14 @@ test('discussion stage 2 is wired: @agents, Ringkas, task and event from a messa
   assert.match(js, /onclick="dsToEvent\(\$\{m\.id\}\)"/);
   assert.match(js, /if \(schPrefill\) schNew\(\);/, 'Schedule opens the form prefilled');
 });
+
+// EPIC-012 stage 3: notifications and the profile page.
+test('notifications: browser on mention/DM, tab title, profile from the sidebar user', () => {
+  assert.match(js, /if \(ev\.type === 'message'\) dsNotify\(ev\);/);
+  assert.match(js, /new Notification\(title, /);
+  assert.match(js, /document\.title = \(unread \? /);
+  assert.match(html, /<div class="sb-user" onclick="openWaPage\('profile'\)"/);
+  assert.match(js, /\bprofile: \{ el: 'profilePage', open: pfOpen, close: pfClose \}/);
+  assert.match(js, /onclick="logout\(\)">Keluar<\/button>/, 'logout moved into the profile page');
+  assert.match(html, /id="profilePage"/);
+});

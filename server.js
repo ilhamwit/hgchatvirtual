@@ -23,6 +23,7 @@ const { createWaArchive } = require('./lib/wa-archive');
 const { createEvents } = require('./lib/events');
 const { createTasks } = require('./lib/tasks');
 const { createHub } = require('./lib/hub');
+const { createNotifier } = require('./lib/notify');
 
 // Fail fast on bad config. Production (systemd) must provide the Hermes
 // API key; CHAT_DEV=1 is the explicit opt-out for local UI work. See .env.example.
@@ -112,6 +113,12 @@ const gateway = createGateway({ url: GATEWAY, key: HERMES_API_KEY });
 
 // Live updates to open browser tabs (EPIC-012 Chat & Discussion).
 const hub = createHub();
+// WhatsApp notifications for unread mentions/DMs/agent answers (EPIC-012 stage 3).
+const notifier = createNotifier({
+  db, hub,
+  onEvent: (event, username, detail) => audit.record(db, { event, username, ip: 'web', detail })
+});
+notifier.start();
 
 // Schedule (EPIC-009): events, Aurix agendas, and the outbox the bot sends
 // (agenda on "Kirim", then reminders). The worker checks the outbox every 30s.
@@ -132,7 +139,8 @@ const api = createApi({
   events,
   // Task Focus (EPIC-010): team tasks and their activity.
   tasks: createTasks({ db }),
-  hub
+  hub,
+  notifier
 });
 
 // Keep only a basename, and only characters that are safe in a shell argument

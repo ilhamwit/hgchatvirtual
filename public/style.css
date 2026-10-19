@@ -1015,3 +1015,28 @@ img.ds-avi{object-fit:cover;background:#F4F4F8;border:1.5px solid rgba(201,168,7
 .ds-sum-meta{font-size:11px;color:#9898B2;margin-bottom:8px;}
 .ds-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .ds-field select{height:36px;border:1px solid #E4E4EE;border-radius:9px;padding:0 8px;font-size:13px;font-family:var(--font);background:#fff;}
+
+/* ── Notifications + profile (EPIC-012 stage 3) ── */
+.ds-notif{margin:2px 4px 10px;padding:10px;border-radius:10px;background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.35);font-size:12px;color:#5A4510;line-height:1.45;}
+.ds-notif div{display:flex;gap:6px;margin-top:8px;}
+.ds-notif .wa-btn{padding:5px 10px;font-size:11.5px;}
+.pf-me{display:flex;align-items:center;gap:14px;}
+.pf-me > div{flex:1;}
+.pf-me b{font-size:15px;color:#111118;}
+.pf-row{display:flex;align-items:center;gap:12px;}
+.pf-row > div{flex:1;min-width:0;}
+.pf-row b{font-size:13px;color:#111118;}
+.pf-settings{margin-top:14px;padding-top:14px;border-top:1px solid #F1F1F6;display:flex;flex-direction:column;gap:14px;}
+.pf-field{display:flex;flex-direction:column;gap:6px;font-size:11.5px;font-weight:600;color:#5A5A72;}
+.pf-field select,.pf-inline input{height:36px;border:1px solid #E4E4EE;border-radius:9px;padding:0 10px;font-size:13px;font-family:var(--font);color:#111118;background:#fff;max-width:260px;}
+.pf-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.pf-field .pf-inline{margin-top:0;}
+.pf-inline span{font-size:12px;color:#9898B2;font-weight:400;}
+.pf-inline input[name=code]{width:120px;letter-spacing:4px;font-weight:700;text-align:center;}
+.pf-inline input[name=number]{width:220px;}
+.pf-switch{position:relative;width:38px;height:22px;flex-shrink:0;}
+.pf-switch input{opacity:0;width:0;height:0;}
+.pf-switch span{position:absolute;inset:0;border-radius:22px;background:#D6D6E0;cursor:pointer;transition:background .15s;}
+.pf-switch span::before{content:'';position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2);}
+.pf-switch input:checked + span{background:var(--gold);}
+.pf-switch input:checked + span::before{transform:translateX(16px);}

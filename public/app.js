@@ -30,7 +30,7 @@ async function loadMe() {
     const me = await res.json();
     ME = me;
     document.getElementById('sbUname').textContent = me.displayName;
-    document.getElementById('sbUstatus').textContent = (me.role === 'admin' ? 'Admin · ' : '') + 'Keluar';
+    document.getElementById('sbUstatus').textContent = (me.role === 'admin' ? 'Admin · ' : '') + 'Profil & notifikasi';
   } catch (e) { /* offline: keep the placeholder */ }
 }
 
@@ -900,7 +900,8 @@ const WA_PAGES = {
   // Not WhatsApp, but the same full-width page slot (EPIC-009).
   schedule: { title: 'Jadwal & Meeting', crumb: 'Schedule', hash: 'schedule' },
   tasks: { title: 'Fokus saya', crumb: 'Task Focus', hash: 'tasks' },
-  discuss: { title: 'Diskusi tim', crumb: 'Chat & Discussion', hash: 'discuss' }
+  discuss: { title: 'Diskusi tim', crumb: 'Chat & Discussion', hash: 'discuss' },
+  profile: { title: 'Profil & notifikasi', crumb: 'Akun', hash: 'profile' }
 };
 const pageHash = (key) => '#' + (WA_PAGES[key].hash || 'wa-' + key);
 let waPage = null;
@@ -1994,6 +1995,7 @@ function dsConnect() {
 }
 
 function dsEvent(ev) {
+  if (ev.type === 'message') dsNotify(ev);
   if (ev.type === 'hello' || ev.type === 'presence') { ds.online = new Set(ev.online); if (waPage === 'discuss') { dsRenderSide(); dsRenderHead(); } return; }
   if (ev.type === 'typing') {
     const key = ev.roomId + ':' + ev.parentId;
@@ -2043,6 +2045,7 @@ function dsBadgeSet({ unread, mentions }) {
   b.classList.toggle('hidden', !unread);
   b.classList.toggle('late', mentions > 0);
   b.title = `${unread} pesan belum dibaca${mentions ? `, ${mentions} menyebut Anda` : ''}`;
+  document.title = (unread ? `(${unread > 99 ? '99+' : unread}) ` : '') + BASE_TITLE;
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && waPage === 'discuss' && ds.cur) dsMarkRead(); });
 
@@ -2081,7 +2084,12 @@ function dsRenderSide() {
     return `<button type="button" class="ds-item${r && ds.cur && ds.cur.id === r.id ? ' on' : ''}${r && r.unread ? ' unread' : ''}" onclick="dsOpenDm('${escapeAttr(p.username)}')">
       <span class="ds-pp">${dsAvatar(p, 'sm')}<span class="ds-dot${ds.online.has(p.username) ? ' on' : ''}"></span></span><span class="ds-item-name">${escapeHtml(p.name)}</span>${count(r)}</button>`;
   }).join('');
-  el.innerHTML = `<div class="ds-side-h">Channel <button type="button" onclick="dsNewChannel()" title="Buat channel" aria-label="Buat channel">+</button></div>${channels}
+  let dismissed = false;
+  try { dismissed = localStorage.getItem('notify.asked') === '1'; } catch (e) { /* private mode */ }
+  const ask = notifSupported() && Notification.permission === 'default' && !dismissed
+    ? `<div class="ds-notif">🔔 Dapat notifikasi saat Anda disebut atau menerima DM?<div><button type="button" class="wa-btn primary" onclick="enableBrowserNotify()">Aktifkan</button>
+        <button type="button" class="wa-btn ghost" onclick="try{localStorage.setItem('notify.asked','1')}catch(e){};dsRenderSide()">Nanti</button></div></div>` : '';
+  el.innerHTML = ask + `<div class="ds-side-h">Channel <button type="button" onclick="dsNewChannel()" title="Buat channel" aria-label="Buat channel">+</button></div>${channels}
     <div class="ds-side-h">Pesan langsung</div>${dms || '<div class="ds-none">Belum ada anggota lain.</div>'}`;
 }
 
@@ -2477,6 +2485,169 @@ function dsToEvent(id) {
 
 meReady.then(() => { dsConnect(); dsRefreshSoon(); });
 
+/* ── Notifications (EPIC-012 stage 3) ─────────────
+   Browser: a desktop notification for a mention, a DM or an agent's answer
+   while a Chat Center tab is open (but not looking at that conversation),
+   and the unread count in the tab title. WhatsApp: set up on the profile
+   page; the server sends it when such a message stays unread. */
+const NOTIF_KEY = 'notify.browser';
+const BASE_TITLE = document.title;
+const notifSupported = () => 'Notification' in window;
+function browserNotifyOn() {
+  if (!notifSupported() || Notification.permission !== 'granted') return false;
+  try { return localStorage.getItem(NOTIF_KEY) !== 'off'; } catch (e) { return true; }
+}
+function setBrowserNotify(on) { try { localStorage.setItem(NOTIF_KEY, on ? 'on' : 'off'); } catch (e) { /* private mode */ } }
+async function enableBrowserNotify() {
+  if (!notifSupported()) { showToast('Browser ini tidak mendukung notifikasi'); return false; }
+  const p = await Notification.requestPermission();
+  if (p === 'granted') { setBrowserNotify(true); showToast('🔔 Notifikasi browser aktif'); }
+  else showToast('Notifikasi ditolak — izinkan lewat ikon gembok di address bar');
+  if (waPage === 'discuss') dsRenderSide();
+  if (waPage === 'profile') pfRender();
+  return p === 'granted';
+}
+
+function dsNotify(ev) {
+  const m = ev.message;
+  if (!m || m.deleted || !browserNotifyOn()) return;
+  const me = dsMe();
+  if (!m.agent && m.author && m.author.username === me) return;
+  const dm = ev.room && ev.room.kind === 'dm';
+  const mentioned = (m.mentions || []).includes(me);
+  if (!dm && !mentioned) return;
+  const viewing = document.visibilityState === 'visible' && waPage === 'discuss' && ds.cur && ds.cur.id === ev.roomId &&
+    (!m.parentId || (ds.thread && ds.thread.id === m.parentId));
+  if (viewing) return;
+  const who = m.agent ? dsAgent(m.agent).name : (m.author ? m.author.name : 'Seseorang');
+  const where = dm ? 'pesan langsung' : '#' + (ev.room ? ev.room.name : '');
+  const title = m.agent ? `${who} menjawab Anda` : dm ? `Pesan dari ${who}` : `${who} menyebut Anda di ${where}`;
+  const text = String(m.body || '').replace(/[*_~`#>]/g, '').replace(/\s+/g, ' ').trim() || (m.attachments && m.attachments.length ? '📎 Lampiran' : '');
+  try {
+    const n = new Notification(title, { body: text.slice(0, 160), tag: 'hg-' + m.id, icon: '/assets/hg-logo.png' });
+    n.onclick = () => { window.focus(); dsGoTo(ev.roomId, m.parentId); n.close(); };
+  } catch (e) { /* some browsers only allow notifications from a service worker */ }
+  dsDing();
+}
+
+// A short soft chime, no audio file needed.
+function dsDing() {
+  try {
+    const ctx = dsDing.ctx || (dsDing.ctx = new (window.AudioContext || window.webkitAudioContext)());
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(880, ctx.currentTime); o.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.18);
+    g.gain.setValueAtTime(0.0001, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+    o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.36);
+  } catch (e) { /* no sound */ }
+}
+
+// Open a room (and thread) from a notification, whatever page is showing.
+async function dsGoTo(roomId, parentId) {
+  try { localStorage.setItem('ds.room', roomId); } catch (e) { /* private mode */ }
+  if (waPage !== 'discuss') { openWaPage('discuss'); for (let i = 0; i < 40 && !(ds.cur && ds.cur.id === roomId && ds.msgs.length); i++) await wait(100); }
+  else if (!ds.cur || ds.cur.id !== roomId) await dsShowRoom(roomId);
+  if (parentId) dsOpenThread(parentId);
+}
+
+/* ── Profil & notifikasi (EPIC-012 T-075/T-076) ── */
+const pf = { profile: null, changing: false };
+async function pfOpen() {
+  await meReady;
+  document.getElementById('profilePage').innerHTML = '<div class="wa-grid"><div class="wa-box"><div class="wa-msg"><span class="wa-spin"></span>Memuat profil…</div></div></div>';
+  try { pf.profile = (await api('GET', '/api/profile')).profile; } catch (e) { pf.profile = null; showToast(e.message); }
+  pf.changing = false;
+  if (waPage === 'profile') pfRender();
+}
+function pfClose() {}
+
+function pfRender() {
+  const el = document.getElementById('profilePage');
+  if (!el) return;
+  const p = pf.profile;
+  const perm = notifSupported() ? Notification.permission : 'unsupported';
+  const browser = perm === 'granted'
+    ? `<div class="pf-row"><label class="pf-switch"><input type="checkbox" ${browserNotifyOn() ? 'checked' : ''} onchange="setBrowserNotify(this.checked);pfRender()"><span></span></label>
+        <div><b>Notifikasi browser ${browserNotifyOn() ? 'aktif' : 'mati'}</b><div class="wa-sub">Untuk browser ini saja. Muncul saat tab Chat Center terbuka, walau di belakang.</div></div>
+        <button class="wa-btn ghost" type="button" onclick="pfTestBrowser()">Tes</button></div>`
+    : perm === 'denied' ? '<div class="wa-msg">Notifikasi diblokir di browser ini. Izinkan lewat ikon gembok di address bar, lalu muat ulang halaman.</div>'
+      : perm === 'unsupported' ? '<div class="wa-msg">Browser ini tidak mendukung notifikasi.</div>'
+        : `<div class="pf-row"><div><b>Belum aktif</b><div class="wa-sub">Browser akan meminta izin sekali.</div></div><button class="wa-btn primary" type="button" onclick="enableBrowserNotify()">🔔 Aktifkan</button></div>`;
+
+  let wa;
+  if (!p) wa = '<div class="wa-msg err">Gagal memuat pengaturan.</div>';
+  else if (p.pending && !p.wa || (p.pending && pf.changing)) {
+    wa = `<form class="pf-code" onsubmit="event.preventDefault();pfVerify(this)">
+        <div class="wa-sub">Kode 6 angka dikirim bot ke <b>${escapeHtml(p.pending.number)}</b>. Berlaku 10 menit.</div>
+        <div class="pf-inline"><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" required>
+          <button class="wa-btn primary" type="submit">Verifikasi</button>
+          <button class="wa-btn ghost" type="button" onclick="pf.profile.pending=null;pf.changing=true;pfRender()">Ganti nomor</button></div></form>`;
+  } else if (!p.wa || pf.changing) {
+    wa = `<form class="pf-code" onsubmit="event.preventDefault();pfRequest(this)">
+        <div class="wa-sub">Nomor WhatsApp pribadi Anda. Bot (Rederp) akan mengirim kode verifikasi ke nomor ini.</div>
+        <div class="pf-inline"><input name="number" inputmode="tel" placeholder="0812 3456 7890" required>
+          <button class="wa-btn primary" type="submit" id="pfSend">Kirim kode</button>
+          ${p.wa ? '<button class="wa-btn ghost" type="button" onclick="pf.changing=false;pfRender()">Batal</button>' : ''}</div></form>`;
+  } else {
+    wa = `<div class="pf-row"><div><b>${escapeHtml(p.wa.number)}</b> <span class="wa-pill ok">Terverifikasi</span></div>
+        <button class="wa-btn ghost" type="button" onclick="pf.changing=true;pfRender()">Ganti</button>
+        <button class="wa-btn ghost" type="button" onclick="pfRemove()">Hapus</button></div>
+      <div class="pf-settings">
+        <div class="pf-row"><label class="pf-switch"><input type="checkbox" id="pfOn" ${p.notifyWa ? 'checked' : ''} onchange="pfSave()"><span></span></label>
+          <div><b>Kirim notifikasi WhatsApp</b><div class="wa-sub">Saat Anda di-@sebut, menerima DM, atau agent menjawab Anda — hanya jika belum dibaca.</div></div></div>
+        <label class="pf-field">Tunggu sebelum mengirim
+          <select id="pfDelay" onchange="pfSave()">${p.delays.map((d) => `<option value="${d}"${d === p.delayMin ? ' selected' : ''}>${d ? d + ' menit' : 'Langsung'}</option>`).join('')}</select></label>
+        <div class="pf-field">Jam tenang (ditahan sampai pagi)
+          <div class="pf-inline"><input type="time" id="pfQs" value="${p.quietStart}" onchange="pfSave()"><span>sampai</span><input type="time" id="pfQe" value="${p.quietEnd}" onchange="pfSave()"></div></div>
+        <div class="pf-row"><div class="wa-sub">Saat Chat Center sedang terbuka di browser, WhatsApp menunggu sampai 30 menit. Beberapa notifikasi digabung jadi satu pesan. Membalas pesan bot tidak sampai ke Chat Center.</div>
+          <button class="wa-btn ghost" type="button" onclick="pfTestWa(this)">Kirim pesan tes</button></div>
+      </div>`;
+  }
+  el.innerHTML = `<div class="wa-grid">
+      <div class="wa-box pf-me">${ME ? dsAvatar({ username: ME.username, name: ME.displayName }) : ''}<div><b>${escapeHtml(ME ? ME.displayName : '')}</b>
+        <div class="wa-sub">@${escapeHtml(ME ? ME.username : '')}${ME && ME.role === 'admin' ? ' · Admin' : ''}</div></div>
+        <button class="wa-btn ghost" type="button" onclick="logout()">Keluar</button></div>
+      <div class="wa-box"><h3>🔔 Notifikasi browser</h3>${browser}</div>
+      <div class="wa-box"><h3>💬 Notifikasi WhatsApp</h3>${wa}</div>
+    </div>`;
+}
+
+async function pfRequest(form) {
+  const b = document.getElementById('pfSend'); b.disabled = true;
+  try { pf.profile = (await api('POST', '/api/profile/wa', { number: form.number.value })).profile; pf.changing = true; showToast('Kode dikirim lewat WhatsApp'); }
+  catch (e) { showToast(e.message); b.disabled = false; return; }
+  pfRender();
+  const c = document.querySelector('#profilePage input[name=code]'); if (c) c.focus();
+}
+async function pfVerify(form) {
+  try { pf.profile = (await api('POST', '/api/profile/wa/verify', { code: form.code.value })).profile; pf.changing = false; showToast('✅ Nomor WhatsApp terverifikasi'); }
+  catch (e) { showToast(e.message); return; }
+  pfRender();
+}
+async function pfRemove() {
+  if (!(await confirmDialog('Hapus nomor WhatsApp?', 'Anda tidak akan menerima notifikasi WhatsApp lagi sampai menambahkan nomor baru.', 'Hapus'))) return;
+  try { pf.profile = (await api('DELETE', '/api/profile/wa')).profile; } catch (e) { showToast(e.message); }
+  pfRender();
+}
+async function pfSave() {
+  try {
+    pf.profile = (await api('PATCH', '/api/profile', {
+      notifyWa: document.getElementById('pfOn').checked, delayMin: Number(document.getElementById('pfDelay').value),
+      quietStart: document.getElementById('pfQs').value, quietEnd: document.getElementById('pfQe').value
+    })).profile;
+    showToast('Pengaturan disimpan');
+  } catch (e) { showToast(e.message); }
+  pfRender();
+}
+async function pfTestWa(b) {
+  b.disabled = true;
+  try { await api('POST', '/api/profile/wa/test'); showToast('Pesan tes dikirim — cek WhatsApp Anda'); } catch (e) { showToast(e.message); }
+  b.disabled = false;
+}
+function pfTestBrowser() {
+  try { new Notification('HG Chat — tes notifikasi', { body: 'Beginilah tampilan notifikasi saat Anda disebut atau menerima DM.', icon: '/assets/hg-logo.png' }); dsDing(); }
+  catch (e) { showToast('Browser ini menolak notifikasi dari halaman'); }
+}
+
 /* ── Page registry: one container per WhatsApp page ── */
 const WA_IMPL = {
   connect: { el: 'waConnect', open: waConnectOpen, close: waConnectClose },
@@ -2484,7 +2655,8 @@ const WA_IMPL = {
   summary: { el: 'waSummaryPage', open: waSummaryOpen, close: waSummaryClose },
   schedule: { el: 'schedulePage', open: schOpen, close: schClose },
   tasks: { el: 'tasksPage', open: tfOpen, close: tfClose },
-  discuss: { el: 'discussPage', open: dsOpen, close: dsClose }
+  discuss: { el: 'discussPage', open: dsOpen, close: dsClose },
+  profile: { el: 'profilePage', open: pfOpen, close: pfClose }
 };
 function closeWaPages() { for (const p of Object.values(WA_IMPL)) p.close(); }
 
