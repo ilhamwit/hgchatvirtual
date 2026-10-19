@@ -78,7 +78,7 @@ REMINDER = "[Mode suara: jawab lisan, tanpa markdown/emoji; ucapan pengguna hasi
 # While Hermes is still working (tools, long thinking) the caller hears a
 # short line instead of silence. FLUSH makes the TTS speak it at once.
 FLUSH = "\u2063"
-FILLER_AFTER = float(os.getenv("VOICE_FILLER_AFTER", "1.6"))
+FILLER_AFTER = float(os.getenv("VOICE_FILLER_AFTER", "3.0"))   # only slow (tool) answers; a filler delays a normal reply
 FILLER_AGAIN = float(os.getenv("VOICE_FILLER_AGAIN", "12"))
 FILLERS = ["Sebentar, saya cek dulu ya.", "Oke, saya lihat dulu sebentar.", "Baik, tunggu sebentar ya."]
 FILLERS_AGAIN = ["Masih saya proses, sebentar lagi ya.", "Masih saya cek, tunggu sebentar ya."]
@@ -154,6 +154,7 @@ class HermesAgent(Agent):
 
     async def llm_node(self, chat_ctx, tools, model_settings):
         text, before = pending_user_text(chat_ctx.items)
+        greeting = not text
         text = text or self.greeting
         # The rules go with the first turn (Hermes remembers them), then a short reminder.
         prefix = VOICE_RULES if self.turns == 0 else REMINDER
@@ -163,7 +164,7 @@ class HermesAgent(Agent):
         self.turns += 1
 
         pieces = self._hermes(f"{prefix}\n\n{text}").__aiter__()
-        fillers = [(FILLER_AFTER, FILLERS), (FILLER_AGAIN, FILLERS_AGAIN)]
+        fillers = [] if greeting else [(FILLER_AFTER, FILLERS), (FILLER_AGAIN, FILLERS_AGAIN)]
         started = time.monotonic()
         got = False
         nxt = asyncio.ensure_future(pieces.__anext__())
@@ -272,7 +273,9 @@ server = AgentServer(
     setup_fnc=setup,
     host="127.0.0.1",                       # health server stays local (host network)
     port=int(os.getenv("WORKER_PORT", "8093")),
-    num_idle_processes=int(os.getenv("NUM_IDLE_PROCESSES", "1")),   # one warm process: no model load on pickup
+    # 0: a warm process holds ~2.3 GB of GPU; next to a call and a process still
+    # releasing the previous call it ran the 16 GB card out of memory.
+    num_idle_processes=int(os.getenv("NUM_IDLE_PROCESSES", "0")),
     initialize_process_timeout=120.0,
     shutdown_process_timeout=2.0,
     session_end_timeout=2.0,
@@ -314,12 +317,12 @@ async def entrypoint(ctx: JobContext):
             # Local end-of-turn model (the cloud one needs LiveKit Cloud keys).
             turn_detection=inference.TurnDetector(version="v1-mini"),
             # Wait a little after the person stops; longer when the model thinks
-            # the sentence is not finished. Whisper needs ~0.4 s after speech ends.
-            endpointing={"min_delay": float(os.getenv("VOICE_MIN_DELAY", "0.6")),
+            # the sentence is not finished.
+            endpointing={"min_delay": float(os.getenv("VOICE_MIN_DELAY", "0.4")),
                          "max_delay": float(os.getenv("VOICE_MAX_DELAY", "2.5"))},
             # Only real speech interrupts the agent; a cough or "hmm" does not,
             # and a false interruption resumes the answer.
-            interruption=InterruptionOptions(mode="vad", min_duration=float(os.getenv("VOICE_INTERRUPT_MIN", "0.6")),
+            interruption=InterruptionOptions(mode="vad", min_duration=float(os.getenv("VOICE_INTERRUPT_MIN", "0.5")),
                                              min_words=0, resume_false_interruption=True,
                                              false_interruption_timeout=1.5, discard_audio_if_uninterruptible=True),
             # No speculative requests: each Hermes request may run tools, so it
