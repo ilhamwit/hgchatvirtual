@@ -45,6 +45,12 @@ function voPanel(x, y, z, w, h, cls, inner = '') {
 function voFlat(x, y, z, w, d, cls, inner = '') {
   return `<div class="vo-flat ${cls}" style="left:${x}px;top:${y}px;width:${w}px;height:${d}px;transform:translateZ(${z}px)">${inner}</div>`;
 }
+// An upright cut-out (like a cardboard standee) at (x, y, z): it turns to face
+// the camera around the vertical axis only, so it never leans into furniture
+// the way a full billboard does when the camera looks down.
+function voStandee(x, y, z, w, h, cls, inner = '', attrs = '') {
+  return `<div class="vo-sp ${cls}" style="left:${x - w / 2}px;top:${y - h}px;width:${w}px;height:${h}px;transform:translateZ(${z}px) rotateZ(calc(var(--rz) * -1)) rotateX(-90deg)"${attrs}>${inner}</div>`;
+}
 // A billboard standing at (x, y, z) that always faces the camera.
 function voSprite(x, y, z, w, h, cls, inner = '', attrs = '') {
   return `<div class="vo-sp ${cls}" style="left:${x - w / 2}px;top:${y - h}px;width:${w}px;height:${h}px;transform:translateZ(${z}px) rotateZ(calc(var(--rz) * -1)) rotateX(calc(var(--rx) * -1))"${attrs}>${inner}</div>`;
@@ -101,13 +107,14 @@ function voDesk(a, i) {
 }
 
 function voAurix() {
-  const x = 1046, y = 560, a = VO_AURIX;
+  // East of the table with room to spare: the standee stays clear of it from every camera angle.
+  const x = 1058, y = 560, a = VO_AURIX;
   return `<div class="vo-desk vo-aurix" data-agent="aurix" style="--ac:${a.color}" onclick="voPickAurix()" onmouseenter="voHover('aurix',true)" onmouseleave="voHover('aurix',false)">`
-    + voFlat(x - 46, y - 30, 0.6, 92, 60, 'vo-shadow')
-    + voFlat(x - 42, y - 42, 0.8, 84, 84, 'vo-ring')
-    + voSprite(x, y, 0, 112, 190, 'vo-robot', `<img src="${a.full}" alt="Aurix">`)
-    + voSprite(x, y, 240, 150, 26, 'vo-name', '<span>Aurix · Bot WA</span>')
-    + voSprite(x, y, 268, 240, 90, 'vo-bubble', '<span class="vo-say"></span><span class="vo-wait">📲 membaca grup…</span>')
+    + voFlat(x - 40, y - 26, 0.6, 80, 52, 'vo-shadow')
+    + voFlat(x - 36, y - 36, 0.8, 72, 72, 'vo-ring')
+    + voStandee(x, y, 0, 112, 224, 'vo-robot', `<img src="${a.full}" alt="Aurix">`)
+    + voSprite(x, y, 232, 150, 26, 'vo-name', '<span>Aurix · Bot WA</span>')
+    + voSprite(x, y, 260, 240, 90, 'vo-bubble', '<span class="vo-say"></span><span class="vo-wait">📲 membaca grup…</span>')
     + '</div>';
 }
 

@@ -65,6 +65,8 @@ test('Aurix stands at the meeting table; clicking opens the WhatsApp group reade
   assert.ok(html.includes('<div class="vo-desk vo-aurix" data-agent="aurix"'), 'Aurix is in the room');
   assert.ok(html.includes('onclick="voPickAurix()"'));
   assert.ok(html.includes('<img src="/assets/agents/aurix-full.png" alt="Aurix">'));
+  // Upright standee (turns around the vertical axis only), so it never leans into the table.
+  assert.ok(html.includes('rotateZ(calc(var(--rz) * -1)) rotateX(-90deg)"><img src="/assets/agents/aurix-full.png"'));
   assert.match(src, /api\('GET', '\/api\/wa\/groups'\)/, 'same read-only archive as Pilih Group');
   assert.ok(fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'agents', 'aurix.jpg')));
   assert.ok(fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'agents', 'aurix-full.png')));

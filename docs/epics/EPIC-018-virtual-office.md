@@ -95,6 +95,12 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   foto resminya diletakkan di server. Diuji di instance uji: hover, daftar 2 grup,
   baca grup "WIT. Surabaya - Strategic", ponsel bottom sheet. Tes baru di
   `test/office.test.js`.
+- 2026-10-19 Pemilik: avatar Aurix yang sekarang dipakai (file foto resmi tidak ada
+  di server), tapi sosoknya tembus ke meja. Penyebab: billboard menghadap kamera
+  sepenuhnya, jadi saat kamera melihat dari atas bidangnya condong ke belakang dan
+  bagian atasnya masuk ke meja. Perbaikan: `voStandee` (tegak, hanya berputar di
+  sumbu vertikal; tinggi dikompensasi 1/sin(kemiringan)), posisi digeser ke
+  x=1058. Dicek dari beberapa sudut kamera (rz 10/40/55/80, rx 42/58).
 
 ## Dependencies
 

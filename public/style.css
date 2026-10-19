@@ -1533,7 +1533,7 @@ img.ds-avi{object-fit:cover;background:#F4F4F8;border:1.5px solid rgba(201,168,7
 
 /* Virtual Office: Aurix (the WhatsApp bot) at the meeting table */
 .vo-robot{pointer-events:auto;cursor:pointer;}
-.vo-robot img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 10px 10px rgba(0,0,0,.28));animation:voBob 3.8s ease-in-out infinite;transition:scale .18s;transform-origin:50% 100%;}
+.vo-robot img{width:100%;height:100%;object-fit:fill;filter:drop-shadow(0 10px 10px rgba(0,0,0,.28));animation:voBob 3.8s ease-in-out infinite;transition:scale .18s;transform-origin:50% 100%;}
 .vo-aurix.hot .vo-robot img,.vo-aurix.talk .vo-robot img{scale:1.08;}
 .vo-msgs.vo-wa{background:#EFEAE2;gap:6px;padding:10px 12px;}
 .vo-msgs.vo-wa.list{background:#fff;gap:0;padding:6px 0;}
