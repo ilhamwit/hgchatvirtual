@@ -24,3 +24,7 @@ npm-debug.log*
 .agentic/config.local.yml
 .agentic/loop-ledger.tsv
 .agentic/loop.pause
+
+# Voice engine (EPIC-016): generated keys/config live next to the compose file
+deploy/voice/livekit.yaml
+__pycache__/

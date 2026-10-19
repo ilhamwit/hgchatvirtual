@@ -47,7 +47,7 @@ Temuan riset:
 ## Tasks
 
 ### Infra
-- [x] **T-094** `deploy/voice/`: LiveKit #2 (port 7890 ws, 7891 tcp, 7892 udp, ICE 60001–61000), worker suara (image Reddie + `app.py` kita, GPU), `scripts/install-voice.sh` (buat key, tulis `.env`, `docker compose up`, cetak langkah Cloudflare & router).
+- [x] **T-094** `deploy/voice/`: LiveKit #2 (port 7890 ws, 7891 tcp, 7892 udp, ICE 62000–62300), worker suara (image Reddie + `app.py` kita, GPU), `scripts/install-voice.sh` (buat key, tulis `.env`, `docker compose up`, cetak langkah Cloudflare & router).
 - [x] **T-095** Worker: VAD + Whisper + OmniVoice seperti Reddie; LLM = Hermes profil dari metadata peserta, header `X-Hermes-Session-Id`; `agent_name="hg-voice"` (dispatch eksplisit); suara per agent dari metadata; transkrip dikirim ke Chat Center; pengisi jeda bila Hermes lambat (>2,5 s).
 
 ### Chat Center
@@ -71,6 +71,7 @@ Temuan riset:
 
 - 2026-10-19 Epic dibuat; riset aurix-kit (compose, app.py Reddie, livekit-agents 1.6.6, plugin OmniVoice/FasterWhisper, token API), Hermes streaming OK, NAT + IP dinamis ditemukan — on-progress
 - 2026-10-19 T-094…T-099 dibangun. `deploy/voice/`: compose (LiveKit #2 + worker image Reddie dengan `app.py` kita, GPU, `host.docker.internal` ke Hermes & Chat Center), `livekit.yaml.example`, `.env.example`, `scripts/install-voice.sh` (buat key, tulis `.env`/`livekit.yaml` 600, tulis `CHAT_VOICE_*` ke env Chat Center, compose up, cetak langkah Cloudflare/router). Worker: `@server.rtc_session(agent_name="hg-voice")` (AgentServer 1.6.6 tidak menerima agent_name di konstruktor), `HermesAgent.llm_node` hanya mengirim pesan terbaru ke `/p/<agent>/v1` dengan `X-Hermes-Session-Id`, aturan mode suara di giliran pertama + pengingat singkat tiap giliran, `reasoning_content` diabaikan, transkrip user/assistant → `POST /api/v1/voice/turns`. Chat Center: `lib/voice.js` (JWT HS256 tanpa dependensi: grant room + `roomConfig.agents` + metadata agent/conversationId/hermesSession/user/voiceProfile; sesi = percakapan baru "🎙️ Panggilan suara · <waktu>"; turns dengan kunci worker, timingSafeEqual), `GET /api/voice/status`, `POST /api/voice/session`, `POST /api/v1/voice/turns`. UI: tombol Suara di kepala chat, layar penuh (orb avatar berdenyut per state `lk.agent.state`, caption dua arah dari stream `lk.transcription`, bisukan, akhiri, Esc), setelah selesai membuka sesi transkrip; Settings → Sistem baris Mode suara. Tes 142/142 (3 baru), gates PASS. Belum: `public/vendor/livekit-client.umd.min.js` (perlu unduhan, izin pemilik), hostname Cloudflare & port forward (pemilik), uji nyata (T-100).
+- 2026-10-19 `install-voice.sh` dijalankan: key dibuat, `CHAT_VOICE_*` ditulis, **LiveKit #2 berjalan** (HTTP 200 di 127.0.0.1:7890, nodeIP 118.99.70.166). Rentang ICE dipindah ke UDP 62000–62300 karena 60425/udp sudah dipakai proses lain. **Worker gagal start**: `/run/nvidia-persistenced/socket` tidak ada — driver NVIDIA di-upgrade otomatis (unattended-upgrades 14 Okt: 595.84 → 595.99.02) sementara modul kernel masih 595.84 (`nvidia-smi`: Driver/library version mismatch); container GPU baru tidak bisa dibuat sampai server **reboot** (container Reddie masih hidup karena dibuat sebelum upgrade). Perbaikan skrip: `getv` dan pembuatan key tidak lagi gagal karena `pipefail`.
 
 ## Dependencies
 

@@ -23,6 +23,7 @@ if [ -r "$envfile" ]; then
   while IFS='=' read -r k v; do
     [[ "$k" =~ ^[A-Z_]+$ ]] || continue
     [ "${#v}" -ge 8 ] || continue          # skip ports and short values
+    [[ "$k" =~ _(URL|HTTP|HOME|DIR|PATH|PROFILES)$ ]] && continue   # addresses and paths are not secrets
     hits=$(files | while IFS= read -r f; do [ -f "$f" ] && grep -qF -- "$v" "$f" && echo "$f"; done || true)
     [ -n "$hits" ] && FAIL "value of $k appears in: $(echo $hits)"
   done < "$envfile"

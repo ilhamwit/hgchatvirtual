@@ -144,7 +144,7 @@ systemctl --user start chat-center
 Tombol 🎙️ **Suara** di kepala chat membuka panggilan layar penuh dengan agent
 yang dipilih; transkripnya menjadi sesi chat baru (bisa dilanjutkan lewat teks,
 sesi Hermes-nya sama). Mesinnya di `deploy/voice/`: LiveKit sendiri (port 7890
-ws, 7891 tcp, 7892 udp, ICE 60001–61000) + worker suara dari image Reddie
+ws, 7891 tcp, 7892 udp, ICE 62000–62300) + worker suara dari image Reddie
 (`~/aurix-kit`) dengan `app.py` kita — STT Whisper GPU, TTS OmniVoice, otak =
 profil Hermes agent. Dispatch eksplisit `hg-voice`, jadi worker Reddie tidak
 pernah masuk ke room Chat Center.
@@ -154,7 +154,7 @@ Pasang sekali (manusia):
 bash "/home/hg/Documents/Chat Center/scripts/install-voice.sh"
 ```
 lalu Cloudflare: `voice.herrygunawan.com → http://localhost:7890`; router: forward
-TCP 7891, UDP 7892, UDP 60001–61000; `bash scripts/restart.sh`. Pustaka browser
+TCP 7891, UDP 7892, UDP 62000–62300; `bash scripts/restart.sh`. Pustaka browser
 `public/vendor/livekit-client.umd.min.js` (livekit-client, versi tetap).
 Suara per agent: `CHAT_VOICE_PROFILES=dave:male_young,…` (folder di
 `~/aurix-kit/voices`). Log worker: `docker logs -f chat-center-voice`.

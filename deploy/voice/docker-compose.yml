@@ -14,7 +14,7 @@ services:
       - "127.0.0.1:7890:7890"   # signaling (WebSocket) — published through Cloudflare as voice.herrygunawan.com
       - "7891:7891"             # RTC over TCP (fallback)
       - "7892:7892/udp"         # RTC over UDP
-      - "60001-61000:60001-61000/udp"   # ICE range
+      - "62000-62300:62000-62300/udp"   # ICE range (small: a handful of calls at a time)
     restart: unless-stopped
     networks: [voice-net]
 

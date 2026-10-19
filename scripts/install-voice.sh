@@ -8,7 +8,7 @@
 # Afterwards (you, once):
 #   1. Cloudflare Zero Trust → Tunnels → public hostname
 #        voice.herrygunawan.com  →  http://localhost:7890
-#   2. Router: forward to this server  TCP 7891, UDP 7892, UDP 60001–61000
+#   2. Router: forward to this server  TCP 7891, UDP 7892, UDP 62000–62300
 #   3. bash scripts/restart.sh
 # Undo: docker compose -f deploy/voice/docker-compose.yml down
 set -euo pipefail
@@ -17,7 +17,7 @@ VOICE=deploy/voice
 ENVF="$HOME/.config/chat-center.env"
 step() { printf '\n==> %s\n' "$1"; }
 rand() { node -e "console.log(require('crypto').randomBytes($1).toString('base64url'))"; }
-getv() { sed -n "s/^$1=//p" "$2" 2>/dev/null | tail -1; }
+getv() { { sed -n "s/^$1=//p" "$2" 2>/dev/null || true; } | tail -1; }
 
 command -v docker >/dev/null || { echo "docker tidak ditemukan"; exit 1; }
 [ -d "$HOME/aurix-kit/voices" ] || { echo "~/aurix-kit/voices tidak ada (dibutuhkan untuk suara)"; exit 1; }
@@ -25,7 +25,7 @@ docker image inspect ghcr.io/zakie0161/realtime-voice-assistant:latest >/dev/nul
 
 step "Keys"
 KEY=$(getv LIVEKIT_API_KEY "$VOICE/.env"); SECRET=$(getv LIVEKIT_API_SECRET "$VOICE/.env"); VKEY=$(getv CHAT_CENTER_VOICE_KEY "$VOICE/.env")
-[ -n "$KEY" ] || KEY="APIcc$(rand 6 | tr -dc 'A-Za-z0-9' | head -c 10)"
+[ -n "$KEY" ] || KEY="APIcc$(node -e "console.log(require('crypto').randomBytes(8).toString('hex').slice(0,10))")"
 [ -n "$SECRET" ] || SECRET=$(rand 32)
 [ -n "$VKEY" ] || VKEY="cc_voice_$(rand 24)"
 HKEY=$(getv HERMES_API_KEY "$ENVF")
@@ -56,7 +56,7 @@ cat <<MSG
 OK — mesin suara berjalan. Sisanya (sekali, oleh Anda):
   1. Cloudflare Zero Trust → Tunnels → public hostname:
        voice.herrygunawan.com  →  http://localhost:7890
-  2. Router: port forward ke server ini  TCP 7891 · UDP 7892 · UDP 60001–61000
+  2. Router: port forward ke server ini  TCP 7891 · UDP 7892 · UDP 62000–62300
   3. bash scripts/restart.sh
 Lalu buka chat agent di web → tombol 🎙️. Log worker: docker logs -f chat-center-voice
 MSG
