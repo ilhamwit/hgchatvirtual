@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time: give the WhatsApp agent (Hermes default profile, bot "Rederp") the
+# One-time: give the WhatsApp agent (Hermes default profile, bot "Aurix") the
 # Chat Center skill and its API key (EPIC-013).
 #
 #   bash scripts/install-hermes-skill.sh

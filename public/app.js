@@ -2584,7 +2584,7 @@ function pfRender() {
           <button class="wa-btn ghost" type="button" onclick="pf.profile.pending=null;pf.changing=true;pfRender()">Ganti nomor</button></div></form>`;
   } else if (!p.wa || pf.changing) {
     wa = `<form class="pf-code" onsubmit="event.preventDefault();pfRequest(this)">
-        <div class="wa-sub">Nomor WhatsApp pribadi Anda. Bot (Rederp) akan mengirim kode verifikasi ke nomor ini.</div>
+        <div class="wa-sub">Nomor WhatsApp pribadi Anda. Bot (Aurix) akan mengirim kode verifikasi ke nomor ini.</div>
         <div class="pf-inline"><input name="number" inputmode="tel" placeholder="0812 3456 7890" required>
           <button class="wa-btn primary" type="submit" id="pfSend">Kirim kode</button>
           ${p.wa ? '<button class="wa-btn ghost" type="button" onclick="pf.changing=false;pfRender()">Batal</button>' : ''}</div></form>`;
@@ -2630,10 +2630,10 @@ function pfKeysHtml() {
       <td>${k.scopes.map((sc) => `<span class="pf-scope">${escapeHtml((pf.scopes && pf.scopes[sc]) || sc)}</span>`).join(' ')}</td>
       <td>${k.lastUsedAt ? escapeHtml(schWibStamp(k.lastUsedAt)) : '<span class="wa-sub">belum dipakai</span>'}</td>
       <td>${k.revokedAt ? '<span class="wa-pill bad">Dicabut</span>' : `<button class="wa-btn ghost" type="button" onclick="pfRevokeKey(${k.id}, '${escapeAttr(k.name)}')">Cabut</button>`}</td></tr>`).join('');
-  return `${fresh}<p class="wa-sub">Untuk sistem lain yang memanggil Chat Center — misalnya agent WhatsApp (Rederp) yang membuat jadwal. Setiap pemakaian tercatat di audit log.</p>
+  return `${fresh}<p class="wa-sub">Untuk sistem lain yang memanggil Chat Center — misalnya agent WhatsApp (Aurix) yang membuat jadwal. Setiap pemakaian tercatat di audit log.</p>
     ${pf.keys.length ? `<table class="pf-keys"><thead><tr><th>Nama</th><th>Izin</th><th>Terakhir dipakai</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : ''}
     <form class="pf-keyform" onsubmit="event.preventDefault();pfCreateKey(this)">
-      <input name="name" maxlength="60" placeholder="Nama key, mis. Rederp (WhatsApp)" required>
+      <input name="name" maxlength="60" placeholder="Nama key, mis. Aurix (WhatsApp)" required>
       ${Object.entries(pf.scopes || {}).map(([sc, label]) => `<label class="pf-check"><input type="checkbox" name="scope" value="${sc}" checked> ${escapeHtml(label)}</label>`).join('')}
       <button class="wa-btn primary" type="submit">Buat API key</button></form>`;
 }

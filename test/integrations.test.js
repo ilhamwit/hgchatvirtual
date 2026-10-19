@@ -35,8 +35,8 @@ async function setup({ agenda = async () => '*Agenda dari Aurix*' } = {}) {
   const events = createEvents({ db, gateway: { ask: ({ text }) => agenda(text) }, bridgeUrl: bridge.url });
   const integ = createIntegrations({ db, events, sessionDir, onEvent: (...a) => audit.push(a) });
   const wrote = (who = PHONE, ago = 60000) => db.prepare('INSERT INTO wa_messages (chat_id, ts, sender_id, sender_number, sender_name, body) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(G, Date.now() - ago, '99887766554433@lid', who, 'Irfan', '@Rederp jadwalkan rapat');
-  const { key } = integ.createKey({ id: 1, username: 'ilham' }, { name: 'Rederp (WhatsApp)', scopes: ['events:write', 'events:read'] });
+    .run(G, Date.now() - ago, '99887766554433@lid', who, 'Irfan', '@Aurix jadwalkan rapat');
+  const { key } = integ.createKey({ id: 1, username: 'ilham' }, { name: 'Aurix (WhatsApp)', scopes: ['events:write', 'events:read'] });
   const req = (k = key) => ({ headers: { authorization: 'Bearer ' + k } });
   return { db, events, integ, bridge, audit, wrote, key, req };
 }
@@ -48,8 +48,8 @@ test('keys: shown once, stored hashed, scoped, revocable, rate limited', async (
   try {
     assert.match(key, /^cc_[A-Za-z0-9_-]{32}$/);
     assert.ok(!JSON.stringify(db.prepare('SELECT * FROM api_keys').all()).includes(key), 'never stored in clear');
-    assert.deepStrictEqual(integ.listKeys().map((k) => [k.name, k.prefix, k.scopes]), [['Rederp (WhatsApp)', key.slice(0, 10), ['events:write', 'events:read']]]);
-    assert.deepStrictEqual(audit[0], ['api_key_created', 'ilham', 'Rederp (WhatsApp) [events:write,events:read]']);
+    assert.deepStrictEqual(integ.listKeys().map((k) => [k.name, k.prefix, k.scopes]), [['Aurix (WhatsApp)', key.slice(0, 10), ['events:write', 'events:read']]]);
+    assert.deepStrictEqual(audit[0], ['api_key_created', 'ilham', 'Aurix (WhatsApp) [events:write,events:read]']);
     assert.throws(() => integ.createKey({ id: 1 }, { name: '', scopes: ['events:read'] }), /nama/);
     assert.throws(() => integ.createKey({ id: 1 }, { name: 'x', scopes: ['admin'] }), /izin/);
     const { key: ro } = integ.createKey({ id: 1, username: 'ilham' }, { name: 'baca saja', scopes: ['events:read'] });
@@ -93,7 +93,7 @@ test('only a verified member who just wrote in the group can create; draft stays
     assert.match(out.reply, /^✅ Draf acara dibuat: \*Rapat evaluasi Q4\* — .+ di Ruang rapat lt\.3\. Agenda sedang disusun; cek & kirim di https:\/\/agents\.herrygunawan\.com\/#schedule$/);
     const row = db.prepare('SELECT source, created_by, auto_send_by FROM events WHERE id = ?').get(out.event.id);
     assert.deepStrictEqual([row.source, row.created_by, row.auto_send_by], ['whatsapp', 2, null]);
-    assert.deepStrictEqual(audit.at(-1), ['api_event_created', 'irfan', `Rederp (WhatsApp): event ${out.event.id} (draft)`]);
+    assert.deepStrictEqual(audit.at(-1), ['api_event_created', 'irfan', `Aurix (WhatsApp): event ${out.event.id} (draft)`]);
     await settle(); await events.tick();
     assert.strictEqual(bridge.sent.length, 0, 'a draft sends nothing');
     assert.strictEqual(events.get(out.event.id).event.status, 'draft');
@@ -138,7 +138,7 @@ test('HTTP: /api/v1 uses API keys, key management is admin-only', async () => {
     const member = (await srv.login('irfan', 'irfan-password-1')).cookie;
     assert.strictEqual((await srv.json(member, 'GET', '/api/integrations/keys')).status, 403);
     assert.strictEqual((await srv.json(member, 'POST', '/api/integrations/keys', { name: 'x', scopes: ['events:read'] })).status, 403);
-    const made = await srv.json(admin, 'POST', '/api/integrations/keys', { name: 'Rederp', scopes: ['events:write', 'events:read'] });
+    const made = await srv.json(admin, 'POST', '/api/integrations/keys', { name: 'Aurix', scopes: ['events:write', 'events:read'] });
     assert.strictEqual(made.status, 201);
     const auth = { authorization: 'Bearer ' + made.body.key, 'content-type': 'application/json' };
     r = await srv.request('/api/v1/events?days=14', { headers: auth });
@@ -162,13 +162,13 @@ test('skill script: creates from a WhatsApp session, refuses outside WhatsApp', 
   const srv = await startServer([{ username: 'ilham', password: 'ilham-password-1', role: 'admin' }, { username: 'irfan', password: 'irfan-password-1' }]);
   try {
     const admin = (await srv.login('ilham', 'ilham-password-1')).cookie;
-    const key = (await srv.json(admin, 'POST', '/api/integrations/keys', { name: 'Rederp', scopes: ['events:write', 'events:read'] })).body.key;
+    const key = (await srv.json(admin, 'POST', '/api/integrations/keys', { name: 'Aurix', scopes: ['events:write', 'events:read'] })).body.key;
     const db = openDb(srv.dbPath);
     const irfan = db.prepare("SELECT id FROM users WHERE username = 'irfan'").get().id;
     db.prepare('INSERT INTO user_profiles (user_id, wa_number, wa_verified_at) VALUES (?, ?, 1)').run(irfan, PHONE);
     db.prepare('INSERT INTO wa_groups (chat_id, name, participants, checked_at) VALUES (?, ?, 5, 0)').run(G, 'Tim Inti');
     db.prepare('INSERT INTO wa_messages (chat_id, ts, sender_id, sender_number, sender_name, body) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(G, Date.now() - 30000, PHONE + '@s.whatsapp.net', PHONE, 'Irfan', '@Rederp jadwalkan rapat');
+      .run(G, Date.now() - 30000, PHONE + '@s.whatsapp.net', PHONE, 'Irfan', '@Aurix jadwalkan rapat');
     db.close();
     const keyFile = path.join(tempDir(), 'k'); fs.writeFileSync(keyFile, key + '\n');
     const script = path.join(__dirname, '..', 'deploy', 'hermes', 'skills', 'chat-center', 'scripts', 'chat_center.py');

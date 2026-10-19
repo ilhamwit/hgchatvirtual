@@ -12,9 +12,9 @@ tasks: T-077 … T-082
 
 ## Goal
 
-Agent WhatsApp (Hermes profil default, bot "Rederp") bisa membuat acara di
+Agent WhatsApp (Hermes profil default, bot "Aurix") bisa membuat acara di
 **Schedule** Chat Center langsung dari grup WhatsApp, lewat **API resmi dengan
-API key** — bukan dengan menulis database. Contoh: *"@Rederp jadwalkan rapat
+API key** — bukan dengan menulis database. Contoh: *"@Aurix jadwalkan rapat
 evaluasi Q4 Jumat jam 10 di ruang rapat lt.3"* → acara muncul di web, agenda
 disusun Aurix, dan bot membalas di grup.
 
@@ -68,6 +68,7 @@ memeriksa bahwa nomor itu memang baru menulis di grup tersebut (arsip grup,
 - 2026-10-19 Epic dibuat atas permintaan pemilik (agent WA membuat jadwal di web; agent bertanya draf atau langsung). Riset: agent WA (profil default) punya tool terminal/file/skills, tanpa web/browser; gateway Hermes memasang `HERMES_SESSION_CHAT_ID/USER_ID/USER_ID_ALT/USER_NAME` pada setiap perintah terminal agent (tidak dari teks model); pada sesi grup WhatsApp `user_id` = nomor pengirim `@s.whatsapp.net` — on-progress
 - 2026-10-19 T-077…T-081 selesai. Skema v10: `api_keys` (hash sha256, awalan, izin, dipakai terakhir, dicabut) + `events.source`/`events.auto_send_by`. `lib/integrations.js`: key `cc_…` tampil sekali, batas 60 panggilan/menit/key; `POST /api/v1/events` (mode wajib `draft`/`send`; peminta = nomor dari `HERMES_SESSION_USER_ID(_ALT)`, LID dipetakan lewat file lid-mapping bridge, harus nomor terverifikasi + di grup harus baru menulis ≤15 menit menurut arsip grup; grup tujuan default = grup asal) dan `GET /api/v1/events?days=`; galat berkode + pesan yang bisa diteruskan agent; audit `api_key_created/revoked`, `api_event_created`, `api_denied`. Mode langsung: begitu agenda Aurix siap → `send` atas nama peminta; Aurix gagal → agenda sederhana dari data acara lalu tetap dikirim. Admin-only kartu **Integrasi API** di Profil; Schedule menandai "Dibuat lewat WhatsApp". Skill Hermes `deploy/hermes/skills/chat-center` (SKILL.md + `scripts/chat_center.py`, identitas dari env sesi gateway, key dari file) + `scripts/install-hermes-skill.sh` untuk pemilik. Tes 125/125 (7 baru termasuk skrip Python sungguhan melawan server uji, 1 UI), gates PASS, screenshot sandbox. Sisa: T-082 uji nyata dari grup (pemilik memasang skill).
 - 2026-10-19 Restart oleh agent: PID 826375 → 890569, gates PASS, `/healthz` ok, skema v10 — live; `/api/v1/events` tanpa key → 401 JSON lewat Cloudflare. Menunggu pemilik: buat key, jalankan `scripts/install-hermes-skill.sh`, uji dari grup (T-082).
+- 2026-10-19 Permintaan pemilik: nama bot WhatsApp di Chat Center ditulis **Aurix**, bukan "Rederp" (UI Profil, Integrasi API, README, skrip pasang, dokumen ini). Nama yang terlihat di grup WhatsApp berasal dari nama profil akun WhatsApp bot (`creds.json` → "Rederp") dan diganti pemilik dari aplikasi WhatsApp.
 
 ## Dependencies
 

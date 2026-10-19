@@ -134,7 +134,7 @@ systemctl --user start chat-center
 
 ### Integrasi API — agent WhatsApp membuat jadwal (EPIC-013)
 
-Agent WhatsApp (Hermes profil default, bot "Rederp") membuat acara di Schedule
+Agent WhatsApp (Hermes profil default, bot "Aurix") membuat acara di Schedule
 lewat `POST /api/v1/events` dengan API key (`Authorization: Bearer cc_…`).
 Peminta harus anggota tim dengan nomor WhatsApp terverifikasi (Profil &
 notifikasi) dan, di grup, baru saja menulis di grup itu. Agent selalu bertanya:
@@ -148,7 +148,7 @@ Pasang sekali (manusia):
    ```
    Tempel key-nya. Skill dipasang di `~/.hermes/skills/productivity/chat-center/`,
    key di `~/.config/chat-center-agent.key` (600).
-3. Uji di grup: "@Rederp jadwalkan rapat tes besok jam 10".
+3. Uji di grup: "@Aurix jadwalkan rapat tes besok jam 10".
 
 Cabut key kapan saja dari halaman yang sama; berlaku seketika.
 
