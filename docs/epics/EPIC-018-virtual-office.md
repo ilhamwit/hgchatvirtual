@@ -8,7 +8,7 @@ area: Frontend
 retries: 0
 prd: ../product/PRD.md
 stories: US-VO-1 … US-VO-2
-tasks: T-107 … T-111
+tasks: T-107 … T-112
 
 ## Goal
 
@@ -49,6 +49,13 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   `pending`): kirim, sesi baru, stop, polling bila koneksi putus, tombol ↗ ke
   halaman chat untuk lampiran/riwayat sesi. Balasan muncul juga sebagai gelembung
   di atas kepala agent selama 9 dtk.
+- T-112 Aurix (bot WhatsApp) berdiri di ujung meja meeting (menggantikan podium):
+  sosok robot penuh (cut-out transparan dari `~/Pictures/Aurix.jpg`, avatar di latar
+  gelap seperti foto resmi), label "Aurix · Bot WA", chip sendiri. Klik → panel
+  daftar grup WhatsApp tempat Aurix berada (arsip baca-saja yang sama dengan Pilih
+  Group); pilih grup → percakapan bergaya WhatsApp, muat pesan lama, muat ulang
+  tiap 15 dtk, pesan baru muncul sebagai gelembung di atas Aurix; tombol ke halaman
+  Pilih Group dan Summary Chat.
 
 ## Acceptance Criteria
 
@@ -82,6 +89,12 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   `window.voSend()`. Tes penjaga baru: tidak boleh ada id yang sama dengan nama
   fungsi. Diverifikasi ulang dengan ketukan sentuh: pesan terkirim, balasan tampil
   di panel dan gelembung 3D. Tes 150/150, gates PASS.
+- 2026-10-19 T-112: Aurix di meja meeting. Foto resmi yang dikirim pemilik di chat
+  tidak tersimpan sebagai file di server, jadi avatar dibuat dari
+  `~/Pictures/Aurix.jpg` (robot yang sama) di latar gelap; bisa diganti bila file
+  foto resminya diletakkan di server. Diuji di instance uji: hover, daftar 2 grup,
+  baca grup "WIT. Surabaya - Strategic", ponsel bottom sheet. Tes baru di
+  `test/office.test.js`.
 
 ## Dependencies
 

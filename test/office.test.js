@@ -59,3 +59,13 @@ test('chat in the office: clicking an agent opens the panel here, messages are e
   assert.ok(ctx.voMsgHtml({ role: 'assistant', content: 'hai' }).includes('<img src="/assets/joel.png"'), 'agent face on replies');
   assert.ok(ctx.voMsgHtml({ role: 'error', content: '<b>x</b>' }).includes('class="vo-mb err">⚠️ &#60;b&#62;'), 'errors escaped');
 });
+
+test('Aurix stands at the meeting table; clicking opens the WhatsApp group reader', () => {
+  const html = load(AG).voScene();
+  assert.ok(html.includes('<div class="vo-desk vo-aurix" data-agent="aurix"'), 'Aurix is in the room');
+  assert.ok(html.includes('onclick="voPickAurix()"'));
+  assert.ok(html.includes('<img src="/assets/agents/aurix-full.png" alt="Aurix">'));
+  assert.match(src, /api\('GET', '\/api\/wa\/groups'\)/, 'same read-only archive as Pilih Group');
+  assert.ok(fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'agents', 'aurix.jpg')));
+  assert.ok(fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'agents', 'aurix-full.png')));
+});

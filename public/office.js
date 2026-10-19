@@ -23,6 +23,8 @@ const VO_FALLBACK = ['#C9A84C', '#E07A5F', '#3B82F6', '#10B981', '#A855F7', '#F5
 const VO_SLOTS = [{ x: 120, y: 236 }, { x: 390, y: 236 }, { x: 660, y: 236 }, { x: 120, y: 500 }, { x: 390, y: 500 }, { x: 660, y: 500 }];
 
 const voColor = (a, i) => VO_COLOR[a.id] || VO_FALLBACK[i % VO_FALLBACK.length];
+// Aurix: the WhatsApp bot, standing at the head of the meeting table.
+const VO_AURIX = { id: 'aurix', name: 'Aurix', role: 'Bot WhatsApp', img: '/assets/agents/aurix.jpg', full: '/assets/agents/aurix-full.png', color: '#25D366' };
 
 /* ── Primitives (HTML strings) ── */
 
@@ -98,6 +100,17 @@ function voDesk(a, i) {
     + '</div>';
 }
 
+function voAurix() {
+  const x = 1046, y = 560, a = VO_AURIX;
+  return `<div class="vo-desk vo-aurix" data-agent="aurix" style="--ac:${a.color}" onclick="voPickAurix()" onmouseenter="voHover('aurix',true)" onmouseleave="voHover('aurix',false)">`
+    + voFlat(x - 46, y - 30, 0.6, 92, 60, 'vo-shadow')
+    + voFlat(x - 42, y - 42, 0.8, 84, 84, 'vo-ring')
+    + voSprite(x, y, 0, 112, 190, 'vo-robot', `<img src="${a.full}" alt="Aurix">`)
+    + voSprite(x, y, 240, 150, 26, 'vo-name', '<span>Aurix · Bot WA</span>')
+    + voSprite(x, y, 268, 240, 90, 'vo-bubble', '<span class="vo-say"></span><span class="vo-wait">📲 membaca grup…</span>')
+    + '</div>';
+}
+
 function voScene() {
   const { W, D, H } = VO;
   const [hh, mm] = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }).split(':').map(Number);
@@ -162,8 +175,7 @@ function voScene() {
     + chairsAround
     + voBox(880, 520, 75, 46, 32, 2, '#B9BCC6')
     + voBox(880, 518, 77, 46, 2, 28, '#2F323A')
-    + voBox(1060, 470, 0, 10, 10, 120, '#4A4E57')
-    + voBox(1032, 452, 120, 66, 46, 3, '#2F323A')
+    + voAurix()
     // plants
     + voPlant(1046, 300) + voPlant(1046, 730, 1.15) + voPlant(18, 330, 0.9) + voPlant(560, 760, 1.05)
     // the team
@@ -176,7 +188,9 @@ function voOpen() {
   voClose();
   const el = document.getElementById('officePage');
   const chips = AGENTS.slice(0, VO_SLOTS.length).map((a, i) => `<button type="button" class="vo-chip" data-agent="${escapeAttr(a.id)}" style="--ac:${voColor(a, i)}" onclick="voPick('${escapeAttr(a.id)}')" onmouseenter="voHover('${escapeAttr(a.id)}',true)" onmouseleave="voHover('${escapeAttr(a.id)}',false)" onfocus="voHover('${escapeAttr(a.id)}',true)" onblur="voHover('${escapeAttr(a.id)}',false)">
-      <img src="${a.img}" alt=""><span><b>${escapeHtml(a.name)}</b><small>${escapeHtml(a.role)}</small></span><i class="vo-dot"></i></button>`).join('');
+      <img src="${a.img}" alt=""><span><b>${escapeHtml(a.name)}</b><small>${escapeHtml(a.role)}</small></span><i class="vo-dot"></i></button>`).join('')
+    + `<button type="button" class="vo-chip" data-agent="aurix" style="--ac:${VO_AURIX.color}" onclick="voPickAurix()" onmouseenter="voHover('aurix',true)" onmouseleave="voHover('aurix',false)" onfocus="voHover('aurix',true)" onblur="voHover('aurix',false)">
+      <img src="${VO_AURIX.img}" alt=""><span><b>Aurix</b><small>Bot WhatsApp</small></span><i class="vo-dot"></i></button>`;
   el.innerHTML = `<div class="vo vo-${voDaypart()}">
     <div class="vo-stage" id="voStage"><div class="vo-cam" id="voCam"><div class="vo-world" id="voWorld">${voScene()}</div></div></div>
     <div class="vo-hud">
@@ -205,12 +219,13 @@ function voOpen() {
   document.addEventListener('keydown', voKey);
   voApply();
   voStatus();
-  if (VO.chat) voChatOpen(VO.chat.agentId);
+  if (VO.chat) { if (VO.chat.agentId === 'aurix') voAurixOpen(VO.chat.group); else voChatOpen(VO.chat.agentId); }
   VO.timer = setInterval(voStatus, 1500);
 }
 
 function voClose() {
   clearInterval(VO.timer); VO.timer = null;
+  clearInterval(VO.waTimer); VO.waTimer = null;
   document.removeEventListener('keydown', voKey);
   Object.values(VO.sayTimers).forEach(clearTimeout); VO.sayTimers = {};
   if (VO.onResize) window.removeEventListener('resize', VO.onResize);
@@ -228,6 +243,12 @@ function voHover(id, on) {
   document.querySelectorAll(`#officePage [data-agent="${CSS.escape(id)}"]`).forEach((n) => n.classList.toggle('hot', on));
   const card = document.getElementById('voCard');
   if (!card) return;
+  if (on && id === 'aurix') {
+    card.innerHTML = `<img src="${VO_AURIX.img}" alt=""><div><b>Aurix</b><span>Bot WhatsApp di grup tim</span><small>Baca percakapan grup WhatsApp</small><em>Klik untuk pilih grup →</em></div>`;
+    card.style.setProperty('--ac', VO_AURIX.color);
+    card.classList.remove('hidden');
+    return;
+  }
   const a = AGENTS.find((x) => x.id === id);
   if (!on || !a) { card.classList.add('hidden'); return; }
   const busy = voBusy(id);
@@ -249,6 +270,7 @@ function voStatus() {
       n.classList.toggle('talk', !!VO.chat && VO.chat.agentId === a.id);
     });
   }
+  document.querySelectorAll('#officePage [data-agent="aurix"]').forEach((n) => n.classList.toggle('talk', !!VO.chat && VO.chat.agentId === 'aurix'));
   voChatButtons();
 }
 
@@ -318,6 +340,7 @@ const voAgent = (id) => AGENTS.find((a) => a.id === id);
 const voConvPending = () => !!(VO.chat && VO.chat.convId && pending[VO.chat.convId]);
 
 function voChatOpen(id) {
+  clearInterval(VO.waTimer); VO.waTimer = null;
   const a = voAgent(id);
   const box = document.getElementById('voChat');
   if (!a || !box) return;
@@ -345,6 +368,7 @@ function voChatOpen(id) {
 
 function voChatClose() {
   VO.chat = null;
+  clearInterval(VO.waTimer); VO.waTimer = null;
   const box = document.getElementById('voChat');
   if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
   const vo = document.querySelector('#officePage .vo');
@@ -510,4 +534,113 @@ function voSay(id, text) {
   desk.classList.add('said');
   clearTimeout(VO.sayTimers[id]);
   VO.sayTimers[id] = setTimeout(() => desk.classList.remove('said'), 9000);
+}
+
+/* ── Aurix: read the WhatsApp groups the bot is in ──────────────────────
+   The same read-only archive as the "Pilih Group" page (/api/wa/groups). */
+
+function voPickAurix() { if (!VO.dragged) voAurixOpen(null); }
+
+function voAurixOpen(groupId) {
+  const box = document.getElementById('voChat');
+  if (!box) return;
+  const seq = (VO.chat && VO.chat.seq || 0) + 1;
+  VO.chat = { agentId: 'aurix', group: groupId || null, seq, msgs: [], hasMore: false };
+  document.querySelector('#officePage .vo').classList.add('chatting');
+  box.classList.remove('hidden');
+  box.style.setProperty('--ac', VO_AURIX.color);
+  box.innerHTML = `<div class="vo-chat-h">
+      <button type="button" class="vo-ib${groupId ? '' : ' hidden'}" id="voWaBack" onclick="voAurixOpen(null)" title="Daftar grup" aria-label="Kembali ke daftar grup"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <img src="${VO_AURIX.img}" alt=""><div class="vo-chat-t"><b id="voWaTitle">Aurix</b><span id="voWaSub">Bot WhatsApp · pilih grup untuk dibaca</span></div>
+      <button type="button" class="vo-ib" onclick="voWaRefresh(true)" title="Muat ulang" aria-label="Muat ulang"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></button>
+      <button type="button" class="vo-ib" onclick="voChatClose();openWaPage('groups')" title="Buka halaman Pilih Group" aria-label="Buka halaman Pilih Group"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+      <button type="button" class="vo-ib" onclick="voChatClose()" title="Tutup (Esc)" aria-label="Tutup"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+    </div>
+    <div class="vo-msgs vo-wa" id="voMsgs"><div class="vo-msg-note"><span class="wa-spin"></span>${groupId ? 'Memuat pesan…' : 'Memuat grup…'}</div></div>
+    <div class="vo-wa-foot"><span>Hanya baca — Aurix membalas di WhatsApp</span>
+      <button type="button" class="wa-btn ghost btn-sm" onclick="voChatClose();openWaPage('summary')">✨ Ringkas grup</button></div>`;
+  voStatus(); voApply();
+  voWaRefresh(true);
+  clearInterval(VO.waTimer);
+  VO.waTimer = setInterval(() => voWaRefresh(false), 15000);
+}
+
+async function voWaRefresh(show) {
+  const c = VO.chat;
+  if (!c || c.agentId !== 'aurix') return;
+  const seq = c.seq;
+  const note = (html) => { if (show && VO.chat && VO.chat.seq === seq) document.getElementById('voMsgs').innerHTML = html; };
+  if (!c.group) {
+    let groups;
+    try { groups = (await api('GET', '/api/wa/groups')).groups; }
+    catch (e) { note(`<div class="vo-msg-note err">Gagal memuat grup: ${escapeHtml(e.message)}</div>`); return; }
+    if (VO.chat && VO.chat.seq === seq) voWaList(groups);
+    return;
+  }
+  let data;
+  try { data = await api('GET', '/api/wa/groups/' + encodeURIComponent(c.group) + '/messages?limit=150'); }
+  catch (e) { note(`<div class="vo-msg-note err">Gagal memuat pesan: ${escapeHtml(e.message)}</div>`); return; }
+  if (!VO.chat || VO.chat.seq !== seq) return;
+  const before = c.msgs.length ? c.msgs[c.msgs.length - 1].id : 0;
+  const after = data.messages.length ? data.messages[data.messages.length - 1].id : 0;
+  if (!show && before === after) return;
+  c.msgs = data.messages; c.hasMore = data.hasMore;
+  voWaChat(data.group, true);
+  // A new message in the group: Aurix "says" it over the meeting table.
+  if (!show && before && after !== before) {
+    const last = data.messages[data.messages.length - 1];
+    voSay('aurix', (last.sender ? last.sender + ': ' : '') + (last.body || last.media || ''));
+  }
+}
+
+function voWaList(groups) {
+  document.getElementById('voWaBack').classList.add('hidden');
+  document.getElementById('voWaTitle').textContent = 'Aurix';
+  document.getElementById('voWaSub').textContent = 'Bot WhatsApp · ' + (groups.length ? groups.length + ' grup, pilih untuk dibaca' : 'belum ada grup');
+  const box = document.getElementById('voMsgs');
+  box.classList.add('list');
+  box.innerHTML = groups.length ? '<div class="vo-wa-intro">Grup WhatsApp tempat Aurix berada. Pilih grup untuk membaca percakapannya.</div>' + groups.map((g) => {
+    const name = waGroupName(g);
+    const last = g.last ? escapeHtml(g.last.sender + ': ' + g.last.text) : '';
+    return `<button type="button" class="wag-item vo-wa-item" onclick="voAurixOpen('${escapeAttr(g.id)}')">
+      <div class="wag-avi" style="background:${waColor(g.id)}">${escapeHtml(name.charAt(0).toUpperCase())}</div>
+      <div class="wag-info"><div class="wag-row1"><span class="wag-name">${escapeHtml(name)}</span><span class="wag-time">${fmtTime(g.lastTs)}</span></div>
+      <div class="wag-meta">${g.participants ? g.participants + ' anggota · ' : ''}${g.messageCount} pesan</div>
+      <div class="wag-prev">${last}</div></div></button>`;
+  }).join('') : '<div class="vo-msg-note">Belum ada pesan grup di arsip. Grup muncul setelah ada pesan pertama sejak arsip aktif.</div>';
+}
+
+function voWaChat(group, toBottom) {
+  const c = VO.chat;
+  document.getElementById('voWaBack').classList.remove('hidden');
+  document.getElementById('voWaTitle').textContent = waGroupName(group);
+  document.getElementById('voWaSub').textContent = (group.participants ? group.participants + ' anggota · ' : '') + 'dibaca Aurix · ' + waClock(Date.now());
+  const box = document.getElementById('voMsgs');
+  box.classList.remove('list');
+  const keep = box.scrollHeight - box.scrollTop;
+  let day = '';
+  const rows = c.msgs.map((m) => {
+    const d = waDay(m.ts);
+    const sep = d !== day ? `<div class="wag-day">${escapeHtml(d)}</div>` : '';
+    day = d;
+    const media = m.media ? `<span class="wag-media">${escapeHtml(m.media)}</span>${m.body ? ' ' : ''}` : '';
+    const who = m.fromMe ? 'Aurix · bot' : escapeHtml(m.sender);
+    return sep + `<div class="wag-msg${m.fromMe ? ' me' : ''}"><div class="wag-from" style="color:${m.fromMe ? '#15803D' : waColor(m.sender)}">${who}</div>
+      <div class="wag-text">${media}${linkify(escapeHtml(m.body || ''))}</div><div class="wag-at">${waClock(m.ts)}</div></div>`;
+  }).join('');
+  box.innerHTML = (c.hasMore ? '<button type="button" class="wa-btn ghost wag-more" onclick="voWaOlder()">Muat pesan lebih lama</button>' : '')
+    + (rows || '<div class="vo-msg-note">Belum ada pesan di grup ini.</div>');
+  box.scrollTop = toBottom ? box.scrollHeight : box.scrollHeight - keep;
+}
+
+async function voWaOlder() {
+  const c = VO.chat;
+  if (!c || !c.group || !c.msgs.length) return;
+  const seq = c.seq;
+  let data;
+  try { data = await api('GET', '/api/wa/groups/' + encodeURIComponent(c.group) + '/messages?limit=150&before=' + c.msgs[0].id); }
+  catch (e) { showToast(e.message); return; }
+  if (!VO.chat || VO.chat.seq !== seq) return;
+  c.msgs = data.messages.concat(c.msgs); c.hasMore = data.hasMore;
+  voWaChat(data.group, false);
 }
