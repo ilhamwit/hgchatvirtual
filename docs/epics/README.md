@@ -31,6 +31,7 @@ riwayat tersimpan di server, dan agent yang benar-benar membantu kerja tim.
 | [EPIC-015](EPIC-015-reports.md)                        | Phase 2 | Reports: arsip laporan agent, mingguan   | P1       | ready-for-qa |
 | [EPIC-016](EPIC-016-voice-mode.md)                     | Phase 3 | Voice mode: ngobrol suara dengan agent   | P1       | on-progress |
 | [EPIC-017](EPIC-017-mobile-responsive.md)              | Phase 3 | Mobile responsive yang rapi              | P1       | ready-for-qa |
+| [EPIC-018](EPIC-018-virtual-office.md)                 | Phase 3 | Virtual Office 3D: klik agent untuk chat | P2       | ready-for-qa |
 
 **Definition of MVP:** selesainya EPIC-000 → EPIC-002.
 

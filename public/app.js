@@ -939,7 +939,8 @@ const WA_PAGES = {
   settings: { title: 'Pengaturan tim', crumb: 'Settings', hash: 'settings' },
   reports: { title: 'Laporan', crumb: 'Reports', hash: 'reports' },
   performance: { title: 'Performance', crumb: 'Tools', hash: 'performance' },
-  automation: { title: 'Automation', crumb: 'Tools', hash: 'automation' }
+  automation: { title: 'Automation', crumb: 'Tools', hash: 'automation' },
+  office: { title: 'Virtual Office', crumb: 'Agents', hash: 'office' }
 };
 const pageHash = (key) => '#' + (WA_PAGES[key].hash || 'wa-' + key);
 let waPage = null;
@@ -3171,7 +3172,9 @@ const WA_IMPL = {
   settings: { el: 'settingsPage', open: stOpen, close: stClose },
   reports: { el: 'reportsPage', open: rpOpen, close: rpClose },
   performance: { el: 'performancePage', open: () => soonOpen('performance'), close: () => {} },
-  automation: { el: 'automationPage', open: () => soonOpen('automation'), close: () => {} }
+  automation: { el: 'automationPage', open: () => soonOpen('automation'), close: () => {} },
+  // office.js loads after this file, hence the arrows.
+  office: { el: 'officePage', open: () => voOpen(), close: () => voClose() }
 };
 function closeWaPages() { for (const p of Object.values(WA_IMPL)) p.close(); }
 

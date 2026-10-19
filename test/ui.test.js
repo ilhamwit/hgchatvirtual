@@ -183,3 +183,13 @@ test('mobile: menu drawer, history panel, list/detail pages, no iOS input zoom',
   const login = fs.readFileSync(path.join(__dirname, '..', 'public', 'login.html'), 'utf8');
   assert.match(login, /\.login-card\{width:calc\(100% - 32px\);/);
 });
+
+// EPIC-018: Virtual Office under the agents list.
+test('virtual office: menu under the agents, page slot, registry, script', () => {
+  assert.match(html, /<div id="sbAgents"><\/div>\s*<div class="nav-item" data-wa="office" onclick="openWaPage\('office'\)">/);
+  assert.match(html, /<div class="wa-page vo-page hidden" id="officePage"><\/div>/);
+  assert.match(html, /<script src="\/app\.js"><\/script>\s*<script src="\/office\.js"><\/script>/);
+  assert.match(js, /office: \{ title: 'Virtual Office', crumb: 'Agents', hash: 'office' \}/);
+  assert.match(js, /office: \{ el: 'officePage', open: \(\) => voOpen\(\), close: \(\) => voClose\(\) \}/);
+  assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{\.vo \*\{animation:none !important;\}\}/);
+});

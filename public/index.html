@@ -96,6 +96,10 @@
       <div class="sb-section">
         <div class="sb-label">Agents</div>
         <div id="sbAgents"></div>
+        <div class="nav-item" data-wa="office" onclick="openWaPage('office')">
+          <span class="ni"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h.01M15 11h.01"/></svg></span>
+          Virtual Office
+        </div>
       </div>
       <div class="sb-foot">
         <div class="sb-user" onclick="openWaPage('profile')" title="Profil, notifikasi, dan keluar">
@@ -194,6 +198,8 @@
       <div class="wa-page wa-full hidden" id="discussPage"></div>
       <!-- Task Focus (EPIC-010): my focus + team board, drawn by app.js -->
       <div class="wa-page wa-full hidden" id="tasksPage"></div>
+      <!-- Virtual Office (EPIC-018): the agents at their desks in 3D, drawn by office.js -->
+      <div class="wa-page vo-page hidden" id="officePage"></div>
       <!-- Schedule (EPIC-009): calendar + events, drawn by app.js -->
       <div class="wa-page wa-full hidden" id="schedulePage"></div>
     </div>
@@ -210,5 +216,6 @@
 <div class="fv hidden" id="fileViewer" role="dialog" aria-modal="true"></div>
 
 <script src="/app.js"></script>
+<script src="/office.js"></script>
 </body>
 </html>
