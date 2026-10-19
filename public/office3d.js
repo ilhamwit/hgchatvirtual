@@ -54,6 +54,7 @@ function mount(stage, opts) {
   stage.appendChild(renderer.domElement);
   const ANISO = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 
+  const el = renderer.domElement;
   const labels = new CSS2DRenderer();
   labels.domElement.className = 'vo3-labels';
   stage.appendChild(labels.domElement);
@@ -556,12 +557,15 @@ function mount(stage, opts) {
   const rSuit = std('suit', { color: '#1B1B1F', roughness: 0.55 });
   const visorMat = keep(new THREE.MeshPhysicalMaterial({ color: '#040506', roughness: 0.06, metalness: 0.3, clearcoat: 1, clearcoatRoughness: 0.03 }));
   const eyeMat = keep(new THREE.MeshStandardMaterial({ color: '#0b0b0b', emissive: '#8FEAFF', emissiveIntensity: 3 }));
+  const legs = [];   // hip pivots: the legs swing from here when Aurix walks
   for (const sx of [-1, 1]) {
-    box(0.16, 0.09, 0.27, rWhite, sx * 0.1, 0.05, 0.03, 0.04, robot);
-    box(0.165, 0.02, 0.275, M.gold, sx * 0.1, 0.01, 0.03, 0.008, robot);
-    limb(V(sx * 0.1, 0.12, 0), V(sx * 0.1, 0.4, 0), 0.075, rWhite, robot);
-    sphere(0.068, M.gold, sx * 0.1, 0.43, 0.01, robot, 18);
-    limb(V(sx * 0.1, 0.46, 0), V(sx * 0.11, 0.66, 0), 0.08, rSuit, robot);
+    const hip = new THREE.Group(); hip.position.set(sx * 0.1, 0.66, 0); robot.add(hip);
+    limb(V(0, 0, 0), V(sx * 0.005, -0.2, 0), 0.08, rSuit, hip);
+    sphere(0.068, M.gold, 0, -0.23, 0.01, hip, 18);
+    limb(V(0, -0.26, 0), V(0, -0.54, 0), 0.075, rWhite, hip);
+    box(0.16, 0.09, 0.27, rWhite, 0, -0.61, 0.03, 0.04, hip);
+    box(0.165, 0.02, 0.275, M.gold, 0, -0.65, 0.03, 0.008, hip);
+    legs.push(hip);
   }
   box(0.44, 0.46, 0.27, rSuit, 0, 0.89, 0, 0.08, robot);
   const shirtV = new THREE.Mesh(keep(new THREE.CircleGeometry(0.1, 3)), std('shirtW', { color: '#F1EEE8', roughness: 0.6 }));
@@ -603,7 +607,7 @@ function mount(stage, opts) {
   const aTagEl = document.createElement('div');
   aTagEl.className = 'vo3-tag'; aTagEl.style.setProperty('--ac', aurix.color);
   aTagEl.innerHTML = `<img src="${aurix.img}" alt=""><span>Aurix · Bot WA</span>`;
-  aTagEl.addEventListener('click', (e) => { e.stopPropagation(); onPick('aurix'); });
+  aTagEl.addEventListener('click', (e) => { e.stopPropagation(); selectAurix(!aurixSel); });
   aTagEl.addEventListener('mouseenter', () => onHover('aurix', true)); aTagEl.addEventListener('mouseleave', () => onHover('aurix', false));
   const aTag = new CSS2DObject(aTagEl); aTag.position.set(0, 1.92, 0); robot.add(aTag);
   const aBubEl = document.createElement('div'); aBubEl.className = 'vo3-bubble'; aBubEl.innerHTML = '<span class="say"></span><span class="wait">📲 membaca grup…</span>';
@@ -753,6 +757,132 @@ function mount(stage, opts) {
   ro.observe(stage);
   resize(); reset();
 
+  /* ── Aurix walks where you click (Diablo-style), around the furniture ──
+     A 20 cm grid of the floor; every piece of furniture standing on it blocks
+     the cells it covers (plus Aurix's radius). A* finds the way, the corners
+     are cut where the line is clear, a Catmull-Rom curve rounds them, and he
+     speeds up, slows down and turns smoothly while his legs and arms swing. */
+  const CELL = 0.2, GX = Math.ceil(W / CELL), GZ = Math.ceil(D / CELL), R_BOT = 0.3;
+  const blocked = new Uint8Array(GX * GZ);
+  const cellOf = (x, z) => [Math.floor((x - X0) / CELL), Math.floor((z - Z0) / CELL)];
+  const cxOf = (i) => X0 + (i + 0.5) * CELL, czOf = (j) => Z0 + (j + 0.5) * CELL;
+  const free = (i, j) => i >= 0 && j >= 0 && i < GX && j < GZ && !blocked[j * GX + i];
+  const walkMarks = new THREE.Group(); scene.add(walkMarks);
+  const markMat = keep(new THREE.MeshBasicMaterial({ color: aurix.color, transparent: true, opacity: 0.9, depthWrite: false }));
+  const marker = new THREE.Group(); marker.visible = false; walkMarks.add(marker);
+  const mRing = new THREE.Mesh(keep(new THREE.RingGeometry(0.17, 0.24, 40)), markMat); mRing.rotation.x = -Math.PI / 2; marker.add(mRing);
+  const mDot = new THREE.Mesh(keep(new THREE.CircleGeometry(0.06, 24)), markMat); mDot.rotation.x = -Math.PI / 2; marker.add(mDot);
+  const ghost = new THREE.Mesh(keep(new THREE.RingGeometry(0.15, 0.2, 40)), keep(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, depthWrite: false })));
+  ghost.rotation.x = -Math.PI / 2; ghost.visible = false; walkMarks.add(ghost);
+  function buildGrid() {
+    for (let j = 0; j < GZ; j++) for (let i = 0; i < GX; i++) {
+      const x = cxOf(i), z = czOf(j);
+      blocked[j * GX + i] = x < X0 + 0.32 || x > X0 + W - 0.28 || z < Z0 + 0.32 || z > Z0 + D - 0.28 ? 1 : 0;
+    }
+    const bb = new THREE.Box3(), part = new THREE.Box3();
+    for (const o of scene.children) {
+      if (o === robot || o === floor || o === walkMarks) continue;
+      // the floor rings and screen glows are not furniture
+      bb.makeEmpty();
+      o.updateWorldMatrix(true, true);
+      o.traverse((m) => { if (m.isMesh && !(m.material && m.material.isMeshBasicMaterial)) { part.setFromObject(m); bb.union(part); } });
+      if (bb.isEmpty() || bb.max.y < 0.03 || bb.min.y > 1.0) continue;   // flat on the floor, or up on a wall
+      const [i0, j0] = cellOf(bb.min.x - R_BOT, bb.min.z - R_BOT), [i1, j1] = cellOf(bb.max.x + R_BOT, bb.max.z + R_BOT);
+      for (let j = Math.max(0, j0); j <= Math.min(GZ - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(GX - 1, i1); i++) blocked[j * GX + i] = 1;
+    }
+  }
+  function nearestFree(i, j) {
+    i = Math.min(GX - 1, Math.max(0, i)); j = Math.min(GZ - 1, Math.max(0, j));
+    if (free(i, j)) return [i, j];
+    for (let r = 1; r < Math.max(GX, GZ); r++) {
+      let best = null, bd = Infinity;
+      for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+        if (Math.max(Math.abs(di), Math.abs(dj)) !== r || !free(i + di, j + dj)) continue;
+        const d = di * di + dj * dj; if (d < bd) { bd = d; best = [i + di, j + dj]; }
+      }
+      if (best) return best;
+    }
+    return null;
+  }
+  function findPath(si, sj, ti, tj) {   // A*, 8 directions, no squeezing past corners
+    const N = GX * GZ, g = new Float32Array(N).fill(Infinity), from = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
+    const h = (i, j) => { const dx = Math.abs(i - ti), dz = Math.abs(j - tj); return dx + dz + (Math.SQRT2 - 2) * Math.min(dx, dz); };
+    const heap = [];
+    const push = (f, k) => { heap.push([f, k]); let c = heap.length - 1; while (c > 0) { const q = (c - 1) >> 1; if (heap[q][0] <= heap[c][0]) break; [heap[q], heap[c]] = [heap[c], heap[q]]; c = q; } };
+    const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let c = 0; for (;;) { const l = 2 * c + 1, r = l + 1; let m = c; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === c) break; [heap[m], heap[c]] = [heap[c], heap[m]]; c = m; } } return top; };
+    const start = sj * GX + si, goal = tj * GX + ti;
+    g[start] = 0; push(h(si, sj), start);
+    while (heap.length) {
+      const k = pop()[1];
+      if (closed[k]) continue; closed[k] = 1;
+      if (k === goal) break;
+      const i = k % GX, j = (k / GX) | 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        if ((!di && !dj) || !free(i + di, j + dj)) continue;
+        if (di && dj && (!free(i + di, j) || !free(i, j + dj))) continue;
+        const nk = (j + dj) * GX + i + di, ng = g[k] + (di && dj ? Math.SQRT2 : 1);
+        if (ng < g[nk]) { g[nk] = ng; from[nk] = k; push(ng + h(i + di, j + dj), nk); }
+      }
+    }
+    if (goal !== start && from[goal] === -1) return null;
+    const cells = [];
+    for (let k = goal; k !== -1; k = from[k]) { cells.push(k); if (k === start) break; }
+    return cells.reverse().map((k) => new THREE.Vector3(cxOf(k % GX), 0, czOf((k / GX) | 0)));
+  }
+  function lineFree(a, b) {
+    const n = Math.max(1, Math.ceil(a.distanceTo(b) / (CELL * 0.5)));
+    for (let k = 0; k <= n; k++) { const q = a.clone().lerp(b, k / n); const [i, j] = cellOf(q.x, q.z); if (!free(i, j)) return false; }
+    return true;
+  }
+  function simplify(pts) {   // keep only the turns the furniture forces
+    const out = [pts[0]];
+    for (let a = 0; a < pts.length - 1;) {
+      let b = pts.length - 1;
+      while (b > a + 1 && !lineFree(pts[a], pts[b])) b--;
+      out.push(pts[b]); a = b;
+    }
+    return out;
+  }
+  const lerpAngle = (a, b, k) => a + ((((b - a + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) - Math.PI) * k;
+  let walk = null, walkW = 0, walkPhase = 0, aurixSel = false, markerT = 0;
+  function walkTo(p) {
+    const [ti, tj] = cellOf(p.x, p.z);
+    const t = nearestFree(ti, tj);
+    const [si, sj] = cellOf(robot.position.x, robot.position.z);
+    const st = nearestFree(si, sj);
+    if (!t || !st) return false;
+    const cells = findPath(st[0], st[1], t[0], t[1]);
+    if (!cells) return false;
+    const goal = free(ti, tj) ? new THREE.Vector3(p.x, 0, p.z) : cells[cells.length - 1].clone();
+    const start = new THREE.Vector3(robot.position.x, 0, robot.position.z);
+    if (start.distanceTo(goal) < 0.1) return false;
+    const pts = simplify([start, ...cells.slice(1, -1), goal]);
+    const curve = pts.length > 2 ? new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5) : new THREE.LineCurve3(pts[0], pts[1]);
+    walk = { curve, len: curve.getLength(), s: 0, v: walk ? walk.v : 0 };
+    marker.position.set(goal.x, 0.016, goal.z); marker.visible = true; markerT = 0;
+    return true;
+  }
+  const POS_KEY = 'vo.aurix';
+  function saveAurix() {
+    try { localStorage.setItem(POS_KEY, JSON.stringify({ x: +robot.position.x.toFixed(2), z: +robot.position.z.toFixed(2), r: +robot.rotation.y.toFixed(2) })); } catch (e) { /* private mode */ }
+  }
+  function selectAurix(on) {
+    aurixSel = !!on;
+    const s = people.get('aurix'); if (s) { s.sel = aurixSel; sync(s); }
+    if (!aurixSel) ghost.visible = false;
+    el.style.cursor = aurixSel ? 'crosshair' : '';
+    if (opts.onAurixSelect) opts.onAurixSelect(aurixSel);
+  }
+  buildGrid();
+  try {   // where you left him last time
+    const saved = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
+    if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.z) && free(...cellOf(saved.x, saved.z))) {
+      robot.position.x = saved.x; robot.position.z = saved.z;
+      if (Number.isFinite(saved.r)) robot.rotation.y = saved.r;
+    }
+  } catch (e) { /* private mode or junk */ }
+  const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
   /* ── picking and hover ── */
   const ray = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -764,7 +894,6 @@ function mount(stage, opts) {
     return h ? h.object.userData.agent : null;
   }
   let down = null, hovered = null, hoverQueued = null;
-  const el = renderer.domElement;
   const onDown = (e) => { down = { x: e.clientX, y: e.clientY }; };
   const onUp = (e) => {
     if (!down) return;
@@ -772,7 +901,9 @@ function mount(stage, opts) {
     down = null;
     if (moved > 6) return;
     const id = hit(e);
-    if (id) onPick(id);
+    if (id === 'aurix') { selectAurix(!aurixSel); return; }   // click Aurix: take control (again: let go)
+    if (id) { onPick(id); return; }
+    if (aurixSel) { const q = ray.ray.intersectPlane(floorPlane, new THREE.Vector3()); if (q) walkTo(q); }
   };
   const onMove = (e) => {
     if (e.pointerType !== 'mouse' || down) return;
@@ -791,12 +922,32 @@ function mount(stage, opts) {
     mHand.rotation.z = -mm * (Math.PI / 30);
   };
   clockNow();
-  let lastClock = 0, raf = 0, running = true;
+  let lastClock = 0, raf = 0, running = true, lastNow = performance.now();
   const t0 = performance.now();
   function frame(now) {
     raf = requestAnimationFrame(frame);
-    if (document.hidden) return;
+    if (document.hidden) { lastNow = now; return; }
     const t = (now - t0) / 1000;
+    const dt = Math.min(0.1, Math.max(0, (now - lastNow) / 1000)); lastNow = now;   // slow devices still walk at real speed
+    if (walk) {
+      const remain = walk.len - walk.s;
+      const vTarget = Math.min(1.35, Math.sqrt(2 * 2.2 * Math.max(0, remain)));   // brake before the goal
+      walk.v = walk.v < vTarget ? Math.min(vTarget, walk.v + 2.6 * dt) : vTarget;   // ease in
+      walk.s = Math.min(walk.len, walk.s + walk.v * dt);
+      const u = walk.len ? walk.s / walk.len : 1;
+      const p = walk.curve.getPointAt(u), tg = walk.curve.getTangentAt(Math.min(u, 0.995));
+      robot.position.x = p.x; robot.position.z = p.z;
+      robot.rotation.y = lerpAngle(robot.rotation.y, Math.atan2(tg.x, tg.z), 1 - Math.exp(-9 * dt));
+      walkPhase += walk.v * dt * 5.4;
+      if (remain < 0.005) { walk = null; saveAurix(); }
+    }
+    walkW += ((walk ? Math.min(1, walk.v / 0.55) : 0) - walkW) * (1 - Math.exp(-8 * dt));
+    if (marker.visible) {
+      markerT += dt;
+      const k = walk ? 1 : Math.max(0, 1 - (markerT - 0.2) * 1.4);
+      markMat.opacity = 0.9 * k; mRing.scale.setScalar(1 + Math.sin(markerT * 6) * 0.08);
+      if (!walk && k <= 0) marker.visible = false;
+    }
     if (fly) {
       const k = Math.min(1, (now - fly.t0) / fly.ms), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
       const dir = camera.position.clone().sub(controls.target).normalize();
@@ -808,13 +959,16 @@ function mount(stage, opts) {
     if (hoverQueued) {
       const id = hit(hoverQueued); hoverQueued = null;
       if (id !== hovered) { if (hovered) onHover(hovered, false); hovered = id; if (id) onHover(id, true); }
-      el.style.cursor = id ? 'pointer' : '';
+      // with Aurix in hand, a ghost ring shows where he would go
+      const q = aurixSel && !id ? ray.ray.intersectPlane(floorPlane, new THREE.Vector3()) : null;
+      if (q && Math.abs(q.x) < W / 2 && Math.abs(q.z) < D / 2) { ghost.position.set(q.x, 0.014, q.z); ghost.visible = true; } else ghost.visible = false;
+      el.style.cursor = id ? 'pointer' : aurixSel ? 'crosshair' : '';
     }
     if (now - lastClock > 20000) { clockNow(); lastClock = now; }
     for (const l of leds) l.mat.emissiveIntensity = reduced ? 2 : (Math.sin(t * l.speed + l.phase) > -0.2 ? 2.4 : 0.2);
     for (const [id, s] of people) {
-      const on = s.hot || s.talk;
-      const target = on ? 0.9 : s.busy ? 0.35 + 0.35 * Math.sin(t * 4) : 0;
+      const on = s.hot || s.talk || s.sel;
+      const target = s.sel ? 0.65 + 0.3 * Math.sin(t * 5) : on ? 0.9 : s.busy ? 0.35 + 0.35 * Math.sin(t * 4) : 0;
       s.ring.material.opacity += (target - s.ring.material.opacity) * 0.15;
       if (reduced) continue;
       if (s.p) {
@@ -826,8 +980,12 @@ function mount(stage, opts) {
         s.glow.material.opacity = s.busy ? 0.35 + 0.3 * Math.sin(t * 6) : 0;
         s.glow.position.y = DESK_TOP + 0.36 + (s.busy ? ((t * 0.35) % 1 - 0.5) * 0.32 : 0);
       } else { // Aurix
-        robot.position.y = Math.sin(t * 1.4) * 0.008;
-        rHead.rotation.z = Math.sin(t * 0.8) * 0.05 + (s.hot ? Math.sin(t * 6) * 0.06 : 0);
+        robot.position.y = Math.sin(t * 1.4) * 0.008 * (1 - walkW) + Math.abs(Math.sin(walkPhase)) * 0.03 * walkW;
+        legs[0].rotation.x = Math.sin(walkPhase) * 0.5 * walkW;
+        legs[1].rotation.x = -Math.sin(walkPhase) * 0.5 * walkW;
+        arms.left.rotation.x = -Math.sin(walkPhase) * 0.25 * walkW;
+        arms.right.rotation.x = Math.sin(walkPhase) * 0.3 * walkW;
+        rHead.rotation.z = Math.sin(t * 0.8) * 0.05 * (1 - walkW) + (s.hot ? Math.sin(t * 6) * 0.06 : 0);
         rHead.rotation.x = s.hot ? -0.08 : 0;
         arms.right.rotation.z = s.hot ? Math.sin(t * 7) * 0.25 : 0;
         const blink = (t % 3.6) < 0.12 ? 0.15 : 1;
@@ -840,7 +998,7 @@ function mount(stage, opts) {
   raf = requestAnimationFrame(frame);
 
   function sync(s) {
-    s.tagEl.classList.toggle('hot', s.hot || s.talk);
+    s.tagEl.classList.toggle('hot', s.hot || s.talk || s.sel);
     s.bubEl.classList.toggle('busy', s.busy);
     s.bubEl.classList.toggle('said', Date.now() < s.said && !s.busy);
   }
@@ -866,6 +1024,10 @@ function mount(stage, opts) {
       camera.position.copy(controls.target).add(off.setLength(d)); controls.update();
     },
     reset: () => reset(true),
+    aurixSelect: (on) => selectAurix(on),
+    isAurixSelected: () => aurixSel,
+    moveAurix: (x, z) => walkTo(new THREE.Vector3(x, 0, z)),
+    aurixAt: () => ({ x: robot.position.x, z: robot.position.z, walking: !!walk }),
     focus,
     scene,   // for debugging in the console
     dispose() {

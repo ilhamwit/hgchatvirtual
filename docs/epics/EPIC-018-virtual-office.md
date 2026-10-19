@@ -8,7 +8,7 @@ area: Frontend
 retries: 0
 prd: ../product/PRD.md
 stories: US-VO-1 … US-VO-2
-tasks: T-107 … T-113
+tasks: T-107 … T-114
 
 ## Goal
 
@@ -66,6 +66,14 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   sebagai robot 3D mengikuti maskotnya. Kamera OrbitControls dibatasi di sisi terbuka;
   klik agent = panel chat + kamera mendekat, tutup = kembali. Tanpa WebGL: ruangan
   CSS 3D lama tetap dipakai.
+- T-114 Mengendalikan Aurix seperti Diablo (pemilik): klik Aurix → terpilih (cincin
+  hijau berdenyut, bilah kontrol "Aurix dipilih" + Baca grup WA / Selesai, kursor
+  crosshair + cincin bayangan di lantai), klik/tap lantai → Aurix berjalan ke sana.
+  Grid 20 cm dari kotak pembatas furnitur (+ radius robot), A* 8 arah tanpa memotong
+  sudut, string-pulling, kurva Catmull-Rom centripetal; percepatan/pengereman, belok
+  halus, langkah kaki dari sendi pinggul, ayunan lengan, sedikit memantul. Tujuan yang
+  tertutup furnitur → sel kosong terdekat. Posisi disimpan di browser (localStorage).
+  Esc pertama melepas kontrol. Chip Aurix tetap membuka daftar grup.
 
 ## Acceptance Criteria
 
@@ -126,6 +134,11 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   presentasi di ujung meja meeting, dispenser air, printer + lemari, AC dinding, dua
   lukisan, tanaman dekat jendela; per meja: panel akustik, alas meja, tempat pena,
   HP, bingkai foto agent, tempat sampah. Tes 156/156, gates PASS.
+- 2026-10-19 T-114 diuji di instance uji (Chromium headless + SwiftShader): Aurix dari
+  meja meeting ke sudut santai mengitari meja meeting dan meja kerja, tiba di sel
+  kosong terdekat, posisi tersimpan. Cincin lantai dan glow layar tidak dihitung
+  sebagai penghalang (sebelumnya menutup lorong antar meja). dt per frame dibatasi
+  0,1 dtk supaya perangkat lambat tetap berjalan dengan kecepatan nyata.
 
 ## Dependencies
 

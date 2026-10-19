@@ -202,7 +202,7 @@ function voOpen() {
   el.innerHTML = `<div class="vo vo-${voDaypart()}">
     <div class="vo-stage" id="voStage"></div>
     <div class="vo-hud">
-      <div class="vo-title"><b>Virtual Office</b><span>Klik agent untuk mulai chat · geser untuk memutar, scroll untuk zoom</span></div>
+      <div class="vo-title"><b>Virtual Office</b><span>Klik agent untuk chat · klik Aurix lalu lantai untuk memindahkannya · geser untuk memutar</span></div>
       <div class="vo-ctl" role="group" aria-label="Kamera">
         <button type="button" onclick="voTurn(-12)" title="Putar ke kiri" aria-label="Putar ke kiri">⟲</button>
         <button type="button" onclick="voTurn(12)" title="Putar ke kanan" aria-label="Putar ke kanan">⟳</button>
@@ -212,6 +212,11 @@ function voOpen() {
       </div>
     </div>
     <div class="vo-card hidden" id="voCard"></div>
+    <div class="vo-ctlbar hidden" id="voAurixBar" role="status">
+      <img src="${VO_AURIX.img}" alt=""><span><b>Aurix dipilih</b> — ${isMobile() ? 'tap' : 'klik'} lantai untuk memindahkannya</span>
+      <button type="button" class="wa-btn ghost btn-sm" onclick="voPickAurix()">📲 Baca grup WA</button>
+      <button type="button" class="wa-btn primary btn-sm" onclick="if (VO.three) VO.three.aurixSelect(false)">Selesai</button>
+    </div>
     <div class="vo-chips">${chips}</div>
     <aside class="vo-chat hidden" id="voChat" aria-label="Chat dengan agent"></aside>
   </div>`;
@@ -239,6 +244,7 @@ function voMountScene(stage) {
       agents: list, aurix: VO_AURIX, daypart: voDaypart(), mobile: isMobile(),
       onPick: (id) => (id === 'aurix' ? voPickAurix() : voPick(id)),
       onHover: (id, on) => voHover(id, on),
+      onAurixSelect: (on) => { const b = document.getElementById('voAurixBar'); if (b) b.classList.toggle('hidden', !on); },
     });
     voStatus();
   }).catch((err) => {
@@ -279,7 +285,11 @@ function voPick(id) {
   if (VO.dragged) return;
   voChatOpen(id);
 }
-function voKey(e) { if (e.key === 'Escape' && VO.chat && !document.querySelector('.cfm:not(.hidden), .fv:not(.hidden)')) voChatClose(); }
+function voKey(e) {
+  if (e.key !== 'Escape' || document.querySelector('.cfm:not(.hidden), .fv:not(.hidden)')) return;
+  if (VO.three && VO.three.isAurixSelected()) { VO.three.aurixSelect(false); return; }   // first Esc lets go of Aurix
+  if (VO.chat) voChatClose();
+}
 
 function voHover(id, on) {
   if (VO.three) VO.three.setHot(id, on);

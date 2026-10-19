@@ -97,3 +97,16 @@ test('3D office: one black suit for everyone, meeting chairs face the table, roo
   assert.match(three, /meetChair\(3\.57 \+ dx, 0\.55, Math\.PI\); meetChair\(3\.57 \+ dx, 2\.17, 0\);/, 'backrests away from the table');
   for (const bit of ['window blinds', 'lounge corner', 'presentation TV', 'water dispenser', 'printer on a low cabinet', 'air conditioner', 'framed art', 'acoustic privacy panel']) assert.ok(three.includes(bit), bit);
 });
+
+test('Aurix under control: click him, then the floor; A* around furniture, smooth walk, Esc lets go', () => {
+  const three = fs.readFileSync(path.join(__dirname, '..', 'public', 'office3d.js'), 'utf8');
+  assert.match(three, /if \(id === 'aurix'\) \{ selectAurix\(!aurixSel\); return; \}/, 'clicking Aurix toggles control');
+  assert.match(three, /if \(aurixSel\) \{ const q = ray\.ray\.intersectPlane\(floorPlane, new THREE\.Vector3\(\)\); if \(q\) walkTo\(q\); \}/, 'then the floor');
+  assert.match(three, /function findPath\(si, sj, ti, tj\) \{   \/\/ A\*/);
+  assert.match(three, /new THREE\.CatmullRomCurve3\(pts, false, 'centripetal', 0\.5\)/, 'rounded corners');
+  assert.match(three, /walk\.v = walk\.v < vTarget \? Math\.min\(vTarget, walk\.v \+ 2\.6 \* dt\) : vTarget;   \/\/ ease in/);
+  assert.match(three, /legs\[0\]\.rotation\.x = Math\.sin\(walkPhase\)/, 'legs swing while walking');
+  assert.match(three, /localStorage\.setItem\(POS_KEY/, 'remembers where he stands');
+  assert.match(src, /if \(VO\.three && VO\.three\.isAurixSelected\(\)\) \{ VO\.three\.aurixSelect\(false\); return; \}/, 'Esc lets go first');
+  assert.match(src, /id="voAurixBar"/);
+});

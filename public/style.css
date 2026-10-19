@@ -1566,3 +1566,15 @@ img.ds-avi{object-fit:cover;background:#F4F4F8;border:1.5px solid rgba(201,168,7
 .vo3-bubble span::after{content:'';position:absolute;left:50%;bottom:-5px;margin-left:-5px;border:5px solid transparent;border-bottom:0;border-top-color:#fff;}
 .vo3-bubble.busy .wait{display:block;white-space:nowrap;}
 .vo3-bubble.said:not(.busy) .say{display:-webkit-box;max-width:240px;font-weight:500;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+
+/* Virtual Office: Aurix under your control (click to select, click the floor to walk) */
+.vo-ctlbar{position:absolute;left:50%;top:70px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:6px 6px 6px 8px;background:rgba(255,255,255,.94);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid #E4E4EE;border-left:4px solid #25D366;border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.12);font-size:12.5px;color:#3A3A52;white-space:nowrap;max-width:calc(100% - 32px);}
+.vo-ctlbar img{width:30px;height:30px;border-radius:50%;object-fit:cover;}
+.vo-ctlbar b{color:#111118;}
+.vo-ctlbar span{overflow:hidden;text-overflow:ellipsis;}
+.vo.chatting .vo-ctlbar{left:calc(50% - 200px);}
+@media (max-width:760px){
+  .vo-ctlbar{top:58px;left:10px;right:10px;transform:none;max-width:none;white-space:normal;flex-wrap:wrap;}
+  .vo-ctlbar span{flex:1 1 60%;}
+  .vo.chatting .vo-ctlbar{left:10px;}
+}
