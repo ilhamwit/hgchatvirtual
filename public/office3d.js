@@ -237,9 +237,21 @@ function mount(stage, opts) {
     quartz: std('quartz', { color: '#EFECE6', roughness: 0.25 }),
     walnut: std('walnut', { color: '#6E4C33', roughness: 0.55 }),
     pants: std('pants', { color: '#2A2D35', roughness: 0.85 }),
-    shoe: std('shoe', { color: '#1B1B1F', roughness: 0.4 }),
+    shoe: std('shoe', { color: '#121214', roughness: 0.25, metalness: 0.1 }),
+    sole: std('sole', { color: '#3A2A20', roughness: 0.6 }),
+    suit: std('suit', { color: '#17181C', roughness: 0.62 }),
+    suitPants: std('suitPants', { color: '#141519', roughness: 0.66 }),
+    lapel: std('lapel', { color: '#202127', roughness: 0.4 }),
+    shirtWhite: std('shirtWhite', { color: '#F5F5F2', roughness: 0.7 }),
+    tie: std('tie', { color: '#0B0B0D', roughness: 0.3, metalness: 0.15 }),
     gold: std('gold', { color: '#D4AF5A', roughness: 0.28, metalness: 1 }),
     keys: std('keys', { map: keysTex, roughness: 0.6 }),
+    panelFabric: std('panelFabric', { color: '#59616E', roughness: 0.95 }),
+    deskMat: std('deskMat', { color: '#24272E', roughness: 0.85 }),
+    binMesh: std('binMesh', { color: '#3A3D45', roughness: 0.5, metalness: 0.4 }),
+    sofa: std('sofa', { color: '#8E8478', roughness: 0.95 }),
+    cushion: std('cushion', { color: '#A39886', roughness: 0.95 }),
+    leather: std('leather', { color: '#6B4A35', roughness: 0.45 }),
   };
   const glass = keep(new THREE.MeshPhysicalMaterial({ color: '#DDEBF3', roughness: 0.05, metalness: 0, transparent: true, opacity: 0.16, envMapIntensity: 1.2 }));
 
@@ -391,7 +403,8 @@ function mount(stage, opts) {
     box(0.46, 0.44, 0.06, M.fabricMeet, 0, 0.72, 0.21, 0.03, g);
     for (const [lx, lz] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]]) cyl(0.014, 0.014, 0.44, M.chrome, lx, 0.22, lz, 10, g);
   }
-  for (const dx of [-0.65, 0, 0.65]) { meetChair(3.57 + dx, 0.55, 0); meetChair(3.57 + dx, 2.17, Math.PI); }
+  // facing: the seat looks at the table, the backrest is away from it
+  for (const dx of [-0.65, 0, 0.65]) { meetChair(3.57 + dx, 0.55, Math.PI); meetChair(3.57 + dx, 2.17, 0); }
   const laptopScreen = keep(new THREE.MeshStandardMaterial({ color: '#000', emissive: '#ffffff', emissiveMap: screenTex({ id: 'joel', name: 'Rapat', role: 'Agenda', color: '#25D366' }), emissiveIntensity: 0.9 }));
   box(0.34, 0.015, 0.24, M.chrome, 3.5, 0.775, 1.42, 0.006);
   const lid = new THREE.Group(); lid.position.set(3.5, 0.78, 1.3); lid.rotation.x = -0.25; scene.add(lid);
@@ -416,22 +429,35 @@ function mount(stage, opts) {
     }
   }
 
-  function person(g, look, shirtColor) {
+  // Everyone wears the same black business suit: white shirt, black tie; the
+  // agent's colour shows only in a small lapel pin (and the name tag, ring, mug).
+  function person(g, look, accent) {
     const skin = std('skin' + look.skin, { color: look.skin, roughness: 0.6 });
     const hair = std('hair' + look.hair, { color: look.hair, roughness: 0.75 });
-    const shirt = std('shirt' + shirtColor, { color: new THREE.Color(shirtColor).offsetHSL(0, -0.12, -0.04), roughness: 0.8 });
+    const shirt = M.suit;   // the jacket and sleeves
     const body = new THREE.Group(); g.add(body);
     // legs: thighs on the seat, shins down to the floor (seated, facing -z)
     for (const sx of [-0.1, 0.1]) {
-      limb(V(sx, 0.57, 0.02), V(sx, 0.58, -0.36), 0.075, M.pants, body);
-      limb(V(sx, 0.56, -0.38), V(sx, 0.1, -0.4), 0.064, M.pants, body);
-      box(0.11, 0.07, 0.25, M.shoe, sx, 0.035, -0.45, 0.03, body);
+      limb(V(sx, 0.57, 0.02), V(sx, 0.58, -0.36), 0.075, M.suitPants, body);
+      limb(V(sx, 0.56, -0.38), V(sx, 0.1, -0.4), 0.064, M.suitPants, body);
+      box(0.11, 0.07, 0.26, M.shoe, sx, 0.035, -0.45, 0.03, body);
+      box(0.112, 0.012, 0.262, M.sole, sx, 0.006, -0.45, 0.004, body);
     }
-    box(0.36, 0.14, 0.3, M.pants, 0, 0.58, 0.02, 0.06, body);
+    box(0.36, 0.14, 0.3, M.suitPants, 0, 0.58, 0.02, 0.06, body);
     const torso = new THREE.Group(); torso.position.set(0, 0.62, 0.04); torso.rotation.x = -0.1; body.add(torso);
     const chest = shadow(new THREE.Mesh(keep(new THREE.CapsuleGeometry(0.17, 0.26, 8, 18)), shirt));
     chest.scale.set(1.12, 1, 0.72); chest.position.y = 0.3; torso.add(chest);
     cyl(0.05, 0.055, 0.08, skin, 0, 0.6, 0, 14, torso);
+    cyl(0.058, 0.062, 0.05, M.shirtWhite, 0, 0.57, 0, 16, torso);                  // shirt collar
+    // shirt V, tie, lapels, pocket square, buttons and the agent-colour pin (front is -z)
+    const vee = new THREE.Shape(); vee.moveTo(-0.075, 0.565); vee.lineTo(0.075, 0.565); vee.lineTo(0, 0.36); vee.lineTo(-0.075, 0.565);
+    const shirtV = new THREE.Mesh(keep(new THREE.ShapeGeometry(vee)), M.shirtWhite); shirtV.position.z = -0.124; shirtV.rotation.y = Math.PI; torso.add(shirtV);
+    box(0.032, 0.17, 0.012, M.tie, 0, 0.455, -0.13, 0.004, torso);
+    box(0.036, 0.03, 0.016, M.tie, 0, 0.545, -0.128, 0.006, torso);
+    for (const lx of [-1, 1]) { const lap = box(0.04, 0.2, 0.01, M.lapel, lx * 0.055, 0.47, -0.128, 0.004, torso); lap.rotation.z = lx * 0.38; }
+    box(0.045, 0.016, 0.01, M.shirtWhite, -0.095, 0.48, -0.122, 0.003, torso);
+    for (const by of [0.33, 0.27]) sphere(0.008, M.black, 0, by, -0.126, torso, 8);
+    sphere(0.009, std('pin' + accent, { color: accent, roughness: 0.3, metalness: 0.6 }), 0.095, 0.5, -0.124, torso, 10);
     const head = new THREE.Group(); head.position.set(0, 0.74, -0.01); torso.add(head);
     sphere(0.112, skin, 0, 0, 0, head, 28).scale.set(0.95, 1.08, 1);
     sphere(0.02, skin, -0.105, -0.005, 0.0, head, 10); sphere(0.02, skin, 0.105, -0.005, 0.0, head, 10); // ears
@@ -457,7 +483,8 @@ function mount(stage, opts) {
       const pivot = new THREE.Group(); pivot.position.copy(el); torso.add(pivot);
       const hand = V(-sx * 0.1, -0.06, -0.32);
       limb(V(0, 0, 0), hand, 0.045, shirt, pivot);
-      sphere(0.045, skin, hand.x, hand.y, hand.z - 0.02, pivot, 12);
+      sphere(0.047, M.shirtWhite, hand.x * 0.94, hand.y * 0.94, hand.z * 0.94, pivot, 12);   // shirt cuff
+      sphere(0.043, skin, hand.x, hand.y, hand.z - 0.025, pivot, 12);
       arms.push(pivot);
     }
     return { body, torso, head, arms };
@@ -481,7 +508,17 @@ function mount(stage, opts) {
     const glow = new THREE.Mesh(keep(new THREE.PlaneGeometry(0.62, 0.05)), keep(new THREE.MeshBasicMaterial({ color: a.color, transparent: true, opacity: 0 })));
     glow.position.set(0, DESK_TOP + 0.36, -0.242); g.add(glow);
     // keyboard, mouse, mug, notebook, lamp
-    const kb = box(0.44, 0.018, 0.14, M.keys, 0, DESK_TOP + 0.01, 0.1, 0.006, g);
+    box(1.5, 0.36, 0.03, M.panelFabric, 0, DESK_TOP + 0.18, -0.385, 0.012, g);        // acoustic privacy panel
+    box(0.74, 0.004, 0.32, M.deskMat, 0.04, DESK_TOP + 0.002, 0.11, 0.002, g);         // desk mat
+    const kb = box(0.44, 0.018, 0.14, M.keys, 0, DESK_TOP + 0.012, 0.1, 0.006, g);
+    cyl(0.032, 0.03, 0.09, M.black, -0.66, DESK_TOP + 0.045, -0.26, 16, g);              // pen holder
+    for (const [px, pc] of [[-0.008, '#2563EB'], [0.01, '#111111'], [0.0, '#DC2626']]) cyl(0.004, 0.004, 0.14, std('pen' + pc, { color: pc, roughness: 0.4 }), -0.66 + px, DESK_TOP + 0.1, -0.26 + px, 6, g);
+    box(0.072, 0.008, 0.145, M.black, 0.44, DESK_TOP + 0.005, -0.02, 0.006, g).rotation.y = -0.25;   // phone
+    const frame = new THREE.Group(); frame.position.set(-0.32, DESK_TOP, -0.28); frame.rotation.set(-0.18, 0.35, 0); g.add(frame);
+    box(0.12, 0.15, 0.012, M.walnut, 0, 0.075, 0, 0.004, frame);
+    const photo = new THREE.Mesh(keep(new THREE.PlaneGeometry(0.096, 0.12)), keep(new THREE.MeshStandardMaterial({ map: keep(new THREE.TextureLoader().load(a.img, (t) => { t.colorSpace = THREE.SRGBColorSpace; })), roughness: 0.5 })));
+    photo.position.set(0, 0.075, 0.0065); frame.add(photo);
+    cyl(0.12, 0.1, 0.3, M.binMesh, -0.6, 0.15, 0.05, 20, g);                              // bin under the desk
     box(0.06, 0.02, 0.1, M.white, 0.32, DESK_TOP + 0.011, 0.12, 0.012, g);
     cyl(0.04, 0.036, 0.1, mugMat(a.color), -0.55, DESK_TOP + 0.05, -0.1, 18, g);
     box(0.2, 0.012, 0.27, std('note', { color: '#FFF3B8', roughness: 0.8 }), -0.42, DESK_TOP + 0.007, 0.16, 0.003, g).rotation.y = 0.2;
@@ -495,7 +532,7 @@ function mount(stage, opts) {
     const seat = new THREE.Group(); seat.position.set(0, 0, 0.66); g.add(seat);
     officeChair(seat);
     const look = LOOKS[a.id] || { hair: '#2A1E17', skin: '#E2B793', style: 'short' };
-    const p = person(seat, look, a.color);
+    const p = person(seat, look, a.color);   // a.color: the lapel pin
     // floor ring (hover / talking / busy)
     const ring = new THREE.Mesh(keep(new THREE.RingGeometry(0.5, 0.6, 56)), keep(new THREE.MeshBasicMaterial({ color: a.color, transparent: true, opacity: 0, depthWrite: false })));
     ring.rotation.x = -Math.PI / 2; ring.position.set(0, 0.012, 0.66); g.add(ring);
@@ -573,6 +610,87 @@ function mount(stage, opts) {
   const aBub = new CSS2DObject(aBubEl); aBub.position.set(0, 2.22, 0); robot.add(aBub);
   tag(robot, 'aurix'); pickables.push(robot);
   people.set('aurix', { g: robot, ring: aRing, p: null, tagEl: aTagEl, bubEl: aBubEl, busy: false, talk: false, hot: false, said: 0, phase: 0 });
+
+  /* ── more detail: blinds, lounge, TV, dispenser, printer, AC, art ── */
+  // window blinds, half down: thin tilted slats that stripe the sunlight on the floor
+  const slats = new THREE.InstancedMesh(keep(new THREE.BoxGeometry(winW + 0.04, 0.006, 0.05)), std('slat', { color: '#F3F1EC', roughness: 0.5 }), 15);
+  slats.castShadow = true; slats.receiveShadow = true;
+  for (let i = 0; i < 15; i++) {
+    tm.compose(V(winCx, WIN.y1 - 0.03 - i * 0.042, Z0 + 0.05), new THREE.Quaternion().setFromAxisAngle(V(1, 0, 0), 0.55), V(1, 1, 1));
+    slats.setMatrixAt(i, tm);
+  }
+  scene.add(slats);
+  box(winW + 0.1, 0.05, 0.07, M.frame, winCx, WIN.y1 + 0.02, Z0 + 0.05, 0.01);          // head rail
+
+  // lounge corner (front left): rug, sofa, armchair, round coffee table, floor lamp
+  const loungeRug = new THREE.Mesh(keep(new THREE.PlaneGeometry(3.1, 1.9)), std('loungeRug', { map: canvasTex(512, 320, (g2, w, h) => {
+    g2.fillStyle = '#D9CDB8'; g2.fillRect(0, 0, w, h);
+    const r = rng(31); for (let k = 0; k < 7000; k++) { g2.fillStyle = `rgba(90,70,50,${r() * 0.06})`; g2.fillRect(r() * w, r() * h, 2, 2); }
+    g2.strokeStyle = '#B9A88E'; g2.lineWidth = 10; g2.strokeRect(14, 14, w - 28, h - 28);
+  }), roughness: 1 }));
+  loungeRug.rotation.x = -Math.PI / 2; loungeRug.position.set(-2.85, 0.006, 3.1); loungeRug.receiveShadow = true; scene.add(loungeRug);
+  const sofa = new THREE.Group(); sofa.position.set(-3.0, 0, 3.55); scene.add(sofa);   // faces -z
+  box(2.0, 0.24, 0.82, M.sofa, 0, 0.2, 0, 0.06, sofa);
+  for (const sx of [-0.48, 0.48]) box(0.94, 0.14, 0.7, M.cushion, sx, 0.38, -0.05, 0.06, sofa);
+  box(2.0, 0.52, 0.2, M.sofa, 0, 0.58, 0.31, 0.08, sofa);
+  for (const sx of [-0.48, 0.48]) box(0.9, 0.36, 0.14, M.cushion, sx, 0.6, 0.18, 0.07, sofa).rotation.x = -0.12;
+  for (const sx of [-1.04, 1.04]) box(0.16, 0.5, 0.82, M.sofa, sx, 0.33, 0, 0.07, sofa);
+  for (const [lx, lz] of [[-0.92, -0.32], [0.92, -0.32], [-0.92, 0.32], [0.92, 0.32]]) cyl(0.025, 0.02, 0.1, M.walnut, lx, 0.05, lz, 10, sofa);
+  box(0.36, 0.3, 0.12, std('pillow', { color: '#C9A84C', roughness: 0.9 }), -0.72, 0.58, 0.12, 0.06, sofa).rotation.z = 0.15;
+  const arm = new THREE.Group(); arm.position.set(-1.45, 0, 2.95); arm.rotation.y = Math.PI / 2; scene.add(arm);   // faces -x
+  box(0.82, 0.26, 0.78, M.leather, 0, 0.22, 0, 0.07, arm);
+  box(0.82, 0.48, 0.18, M.leather, 0, 0.58, 0.3, 0.08, arm);
+  for (const sx of [-0.43, 0.43]) box(0.14, 0.42, 0.78, M.leather, sx, 0.33, 0, 0.06, arm);
+  const ctab = new THREE.Group(); ctab.position.set(-2.85, 0, 2.75); scene.add(ctab);
+  cyl(0.42, 0.42, 0.04, M.oak, 0, 0.42, 0, 40, ctab);
+  for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2; const leg = cyl(0.016, 0.016, 0.42, M.metalDark, Math.cos(a) * 0.26, 0.2, Math.sin(a) * 0.26, 8, ctab); leg.rotation.set(Math.sin(a) * 0.18, 0, -Math.cos(a) * 0.18); }
+  box(0.24, 0.02, 0.32, std('mag', { color: '#2F6F9F', roughness: 0.7 }), -0.1, 0.45, 0.05, 0.004, ctab).rotation.y = 0.4;
+  cyl(0.05, 0.04, 0.09, mugMat('#F5F5F5'), 0.16, 0.485, -0.08, 16, ctab);
+  const flamp = new THREE.Group(); flamp.position.set(-4.25, 0, 3.7); scene.add(flamp);
+  cyl(0.16, 0.18, 0.03, M.black, 0, 0.015, 0, 24, flamp);
+  cyl(0.012, 0.012, 1.55, M.black, 0, 0.8, 0, 8, flamp);
+  cyl(0.16, 0.24, 0.3, std('shade', { color: '#F1E7D3', roughness: 0.9, emissive: '#FFD9A3', emissiveIntensity: daypart === 'night' ? 0.9 : 0.05, side: THREE.DoubleSide }), 0, 1.62, 0, 28, flamp).castShadow = false;
+  if (daypart !== 'day') { const fl = new THREE.PointLight('#FFD3A1', daypart === 'night' ? 4 : 2, 4.5, 2); fl.position.set(0, 1.5, 0); flamp.add(fl); }
+
+  // presentation TV on a stand at the west end of the meeting table
+  const tv = new THREE.Group(); tv.position.set(2.05, 0, 1.36); tv.rotation.y = Math.PI / 2; scene.add(tv);   // faces +x
+  box(0.6, 0.03, 0.42, M.metalDark, 0, 0.015, 0, 0.01, tv);
+  box(0.06, 1.25, 0.06, M.metalDark, 0, 0.64, 0, 0.01, tv);
+  box(1.3, 0.76, 0.05, M.black, 0, 1.3, 0.03, 0.015, tv);
+  const tvScr = new THREE.Mesh(keep(new THREE.PlaneGeometry(1.24, 0.7)), keep(new THREE.MeshStandardMaterial({ color: '#000', emissive: '#fff', emissiveIntensity: 0.9, emissiveMap: canvasTex(640, 360, (g2, w, h) => {
+    g2.fillStyle = '#10131B'; g2.fillRect(0, 0, w, h);
+    g2.fillStyle = '#C9A84C'; g2.font = 'bold 34px Inter, Arial, sans-serif'; g2.fillText('Weekly Meeting · HG', 30, 56);
+    g2.fillStyle = 'rgba(255,255,255,.6)'; g2.font = '20px Inter, Arial, sans-serif'; ['Progres tugas tim', 'Jadwal minggu ini', 'Laporan Aurix'].forEach((t, i) => g2.fillText('•  ' + t, 34, 112 + i * 36));
+    const r = rng(41); for (let i = 0; i < 7; i++) { const bh = 40 + r() * 140; g2.fillStyle = i % 2 ? '#25D366' : '#C9A84C'; g2.fillRect(360 + i * 36, 320 - bh, 24, bh); }
+  }) })));
+  tvScr.position.set(0, 1.3, 0.056); tv.add(tvScr);
+
+  // water dispenser next to the coffee counter
+  box(0.32, 1.0, 0.32, M.white, 2.6, 0.5, -3.8, 0.03);
+  box(0.2, 0.12, 0.02, M.black, 2.6, 0.82, -3.635, 0.006);
+  const bottle = new THREE.Mesh(keep(new THREE.CylinderGeometry(0.13, 0.13, 0.42, 28)), keep(new THREE.MeshPhysicalMaterial({ color: '#7CC4F0', roughness: 0.05, transparent: true, opacity: 0.55 })));
+  bottle.position.set(2.6, 1.22, -3.8); scene.add(bottle);
+
+  // printer on a low cabinet beside the server rack
+  box(0.72, 0.68, 0.5, M.white, -4.25, 0.34, -3.78, 0.02);
+  box(0.52, 0.24, 0.42, std('printer', { color: '#D9DBE0', roughness: 0.45 }), -4.25, 0.8, -3.78, 0.03);
+  box(0.36, 0.006, 0.16, M.shirtWhite, -4.25, 0.93, -3.62, 0.002);
+
+  // air conditioner on the left wall
+  box(0.24, 0.3, 0.95, M.white, X0 + 0.12, 2.55, -2.0, 0.05);
+  box(0.02, 0.03, 0.8, M.black, X0 + 0.245, 2.45, -2.0, 0.006);
+
+  // framed art above the bookshelf
+  for (const [az, seed, pal] of [[2.35, 51, ['#C9A84C', '#1F3A4D', '#E8DCC2']], [3.25, 52, ['#2F6F9F', '#E07A5F', '#F4EFE6']]]) {
+    box(0.03, 0.56, 0.72, M.black, X0 + 0.02, 2.36, az, 0.01);
+    const art = new THREE.Mesh(keep(new THREE.PlaneGeometry(0.64, 0.48)), keep(new THREE.MeshStandardMaterial({ roughness: 0.6, map: canvasTex(320, 240, (g2, w, h) => {
+      g2.fillStyle = pal[2]; g2.fillRect(0, 0, w, h);
+      const r = rng(seed); for (let k = 0; k < 6; k++) { g2.fillStyle = pal[k % 2]; g2.globalAlpha = 0.75; g2.beginPath(); g2.arc(r() * w, r() * h, 20 + r() * 70, 0, Math.PI * 2); g2.fill(); }
+      g2.globalAlpha = 1;
+    }) })));
+    art.rotation.y = Math.PI / 2; art.position.set(X0 + 0.04, 2.36, az); scene.add(art);
+  }
+  plant(-0.35, -3.65, 1.0, 7);   // by the window
 
   /* ── lights ── */
   const hemi = new THREE.HemisphereLight(daypart === 'night' ? '#38415E' : '#EAF2FF', daypart === 'night' ? '#2A2420' : '#B79A78', daypart === 'night' ? 0.55 : 1.1);

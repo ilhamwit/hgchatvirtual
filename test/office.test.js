@@ -88,3 +88,12 @@ test('three.js office: vendored three 0.170.0 via the import map, loaded lazily,
   for (const api of ['setState(', 'setHot(', 'say(', 'turn(', 'zoom(', 'focus,', 'dispose()']) assert.ok(three.includes(api), api);
   assert.ok(!/https?:\/\//.test(three.replace(/\/\/[^\n]*/g, '')), 'no network URLs in the scene code');
 });
+
+test('3D office: one black suit for everyone, meeting chairs face the table, room details', () => {
+  const three = fs.readFileSync(path.join(__dirname, '..', 'public', 'office3d.js'), 'utf8');
+  assert.match(three, /const shirt = M\.suit;/, 'jacket and sleeves are the shared black suit');
+  assert.match(three, /suit: std\('suit', \{ color: '#17181C'/);
+  assert.match(three, /tie: std\('tie', \{ color: '#0B0B0D'/);
+  assert.match(three, /meetChair\(3\.57 \+ dx, 0\.55, Math\.PI\); meetChair\(3\.57 \+ dx, 2\.17, 0\);/, 'backrests away from the table');
+  for (const bit of ['window blinds', 'lounge corner', 'presentation TV', 'water dispenser', 'printer on a low cabinet', 'air conditioner', 'framed art', 'acoustic privacy panel']) assert.ok(three.includes(bit), bit);
+});

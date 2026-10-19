@@ -117,6 +117,15 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   Bug ditemukan & diperbaiki: komentar menelan `scene.add(robot)`; boot memanggil
   `switchAgent` yang menutup halaman yang baru dibuka (sekarang `switchAgent(id,
   keepPage)`). Tes 155/155, gates PASS.
+- 2026-10-19 Pemilik: semua agent memakai business attire hitam yang sama, kursi di
+  dekat Aurix terbalik, 3D lebih detail. Seragam: jas & celana hitam, kemeja putih,
+  dasi hitam, kerah, lapel, saku, manset, sepatu; warna agent hanya di pin kerah (dan
+  label, cincin, mug). Kursi meeting: sandaran sekarang menjauhi meja (keenam kursi
+  terbalik sebelumnya). Detail baru: tirai kerai (bayangan bergaris di lantai), sudut
+  santai (karpet, sofa + bantal, kursi kulit, meja kopi bundar, lampu lantai), TV
+  presentasi di ujung meja meeting, dispenser air, printer + lemari, AC dinding, dua
+  lukisan, tanaman dekat jendela; per meja: panel akustik, alas meja, tempat pena,
+  HP, bingkai foto agent, tempat sampah. Tes 156/156, gates PASS.
 
 ## Dependencies
 
