@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
@@ -46,6 +47,17 @@ HERMES_URL = os.getenv("HERMES_URL", "http://127.0.0.1:8642").rstrip("/")
 HERMES_API_KEY = os.getenv("HERMES_API_KEY", "")
 CHAT_CENTER_URL = os.getenv("CHAT_CENTER_URL", "http://127.0.0.1:8643").rstrip("/")
 VOICE_KEY = os.getenv("CHAT_CENTER_VOICE_KEY", "")
+# Characters a voice must never read aloud: emoji/pictographs, variation
+# selectors, zero-width joiners and markdown markers. Applied per streamed piece.
+UNSPOKEN = re.compile(
+    "[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0E\uFE0F\u200D\u20E3*#`~|]"
+)
+
+
+def speakable(piece: str) -> str:
+    return UNSPOKEN.sub("", piece)
+
+
 AGENT_IDS = [a.strip() for a in os.getenv("CHAT_AGENTS", "dave,jaden,joel,dylan,nana").split(",") if a.strip()]
 
 VOICE_RULES = (
@@ -126,7 +138,7 @@ class HermesAgent(Agent):
                 if not chunk.choices:
                     continue
                 delta = chunk.choices[0].delta
-                piece = getattr(delta, "content", None)      # reasoning_content is never spoken
+                piece = speakable(getattr(delta, "content", None) or "")   # reasoning_content is never spoken
                 if piece:
                     got = True
                     yield piece
