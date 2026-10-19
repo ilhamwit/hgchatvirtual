@@ -37,8 +37,9 @@ test('the WhatsApp view lives in .main next to the chat, hidden at start', () =>
 
 test('chat navigation closes a WhatsApp page; reload on #wa-<page> reopens it', () => {
   assert.match(js, /function navClick\(el\) \{\n  showChatView\(\);/);
-  assert.match(js, /function switchAgent\(id\) \{[\s\S]{0,120}showChatView\(\);/);
-  assert.match(js, /\.then\(\(\) => switchAgent\('dave'\)\)\.then\(openWaFromHash\)/);
+  assert.match(js, /function switchAgent\(id, keepPage\) \{[\s\S]{0,120}if \(!keepPage\) showChatView\(\);/);
+  // Boot sets Dave up without closing a page opened meanwhile, then follows the hash.
+  assert.match(js, /\.then\(\(\) => switchAgent\('dave', true\)\)\.then\(\(\) => \{ if \(!waPage\) openWaFromHash\(\); \}\)/);
   for (const fn of ['openWaPage', 'showChatView', 'openWaFromHash']) {
     assert.match(js, new RegExp(`function ${fn}\\(`), fn);
   }

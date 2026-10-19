@@ -61,10 +61,11 @@ let current = AGENTS[0];
 let sockOpen = true;
 let dropOpen = false;
 
-function switchAgent(id) {
+// keepPage: set the agent up without leaving the page that is open (boot).
+function switchAgent(id, keepPage) {
   const a = AGENTS.find(x=>x.id===id);
   if(!a) return;
-  showChatView();
+  if (!keepPage) showChatView();
   current = a;
   document.getElementById('selImg').src = a.img;
   document.getElementById('selName').textContent = a.name;
@@ -3231,4 +3232,5 @@ window.addEventListener('hashchange', () => {
 });
 
 renderDrop();renderSb();
-refreshConvs().then(() => switchAgent('dave')).then(openWaFromHash).then(importOldHistory);
+// A page opened while this loads (a quick click on Virtual Office) stays open.
+refreshConvs().then(() => switchAgent('dave', true)).then(() => { if (!waPage) openWaFromHash(); }).then(importOldHistory);

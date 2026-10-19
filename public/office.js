@@ -12,6 +12,7 @@ const VO = {
   W: 1100, D: 820, H: 240,          // room size
   rz: 40, rx: 58, zoom: 1,          // camera: turn, tilt, zoom
   timer: null, onResize: null,
+  three: null, mountSeq: 0,          // the three.js scene (office3d.js) when WebGL is available
   chat: null,                       // { agentId, convId, seq } while the chat panel is open
   sayTimers: {},
   ptr: new Map(), drag: null, dragged: false, pinch: null,
@@ -199,9 +200,9 @@ function voOpen() {
     + `<button type="button" class="vo-chip" data-agent="aurix" style="--ac:${VO_AURIX.color}" onclick="voPickAurix()" onmouseenter="voHover('aurix',true)" onmouseleave="voHover('aurix',false)" onfocus="voHover('aurix',true)" onblur="voHover('aurix',false)">
       <img src="${VO_AURIX.img}" alt=""><span><b>Aurix</b><small>Bot WhatsApp</small></span><i class="vo-dot"></i></button>`;
   el.innerHTML = `<div class="vo vo-${voDaypart()}">
-    <div class="vo-stage" id="voStage"><div class="vo-cam" id="voCam"><div class="vo-world" id="voWorld">${voScene()}</div></div></div>
+    <div class="vo-stage" id="voStage"></div>
     <div class="vo-hud">
-      <div class="vo-title"><b>Virtual Office</b><span>Klik agent di mejanya untuk mulai chat · geser untuk memutar ruangan</span></div>
+      <div class="vo-title"><b>Virtual Office</b><span>Klik agent untuk mulai chat · geser untuk memutar, scroll untuk zoom</span></div>
       <div class="vo-ctl" role="group" aria-label="Kamera">
         <button type="button" onclick="voTurn(-12)" title="Putar ke kiri" aria-label="Putar ke kiri">⟲</button>
         <button type="button" onclick="voTurn(12)" title="Putar ke kanan" aria-label="Putar ke kanan">⟳</button>
@@ -214,7 +215,42 @@ function voOpen() {
     <div class="vo-chips">${chips}</div>
     <aside class="vo-chat hidden" id="voChat" aria-label="Chat dengan agent"></aside>
   </div>`;
-  const stage = document.getElementById('voStage');
+  document.addEventListener('keydown', voKey);
+  voMountScene(document.getElementById('voStage'));
+  voStatus();
+  if (VO.chat) { if (VO.chat.agentId === 'aurix') voAurixOpen(VO.chat.group); else voChatOpen(VO.chat.agentId); }
+  VO.timer = setInterval(voStatus, 1500);
+}
+
+// three.js when the browser has WebGL; otherwise the CSS-3D room below.
+function voWebGL() {
+  try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
+}
+function voMountScene(stage) {
+  if (!voWebGL()) { voMountCss(stage); return; }
+  stage.classList.add('three');
+  stage.innerHTML = '<div class="vo3-loading"><span class="wa-spin"></span>Menyiapkan kantor 3D…</div>';
+  const seq = ++VO.mountSeq;
+  import('/office3d.js').then((m) => {
+    if (waPage !== 'office' || seq !== VO.mountSeq || !document.body.contains(stage)) return;
+    stage.innerHTML = '';
+    const list = AGENTS.slice(0, VO_SLOTS.length).map((a, i) => ({ id: a.id, name: a.name, role: a.role, img: a.img, color: voColor(a, i) }));
+    VO.three = m.mount(stage, {
+      agents: list, aurix: VO_AURIX, daypart: voDaypart(), mobile: isMobile(),
+      onPick: (id) => (id === 'aurix' ? voPickAurix() : voPick(id)),
+      onHover: (id, on) => voHover(id, on),
+    });
+    voStatus();
+  }).catch((err) => {
+    console.warn('Virtual Office: 3D unavailable, using the CSS room', err);
+    if (waPage !== 'office' || seq !== VO.mountSeq) return;
+    if (VO.three) { try { VO.three.dispose(); } catch (e) { /* half-built */ } VO.three = null; }
+    stage.classList.remove('three');
+    voMountCss(stage);
+  });
+}
+function voMountCss(stage) {
+  stage.innerHTML = `<div class="vo-cam" id="voCam"><div class="vo-world" id="voWorld">${voScene()}</div></div>`;
   stage.addEventListener('pointerdown', voDown);
   stage.addEventListener('pointermove', voMove);
   stage.addEventListener('pointerup', voUp);
@@ -223,14 +259,13 @@ function voOpen() {
   stage.addEventListener('click', (e) => { if (VO.dragged) { e.stopPropagation(); e.preventDefault(); VO.dragged = false; } }, true);
   VO.onResize = () => voApply();
   window.addEventListener('resize', VO.onResize);
-  document.addEventListener('keydown', voKey);
   voApply();
   voStatus();
-  if (VO.chat) { if (VO.chat.agentId === 'aurix') voAurixOpen(VO.chat.group); else voChatOpen(VO.chat.agentId); }
-  VO.timer = setInterval(voStatus, 1500);
 }
 
 function voClose() {
+  VO.mountSeq++;
+  if (VO.three) { try { VO.three.dispose(); } catch (e) { /* already gone */ } VO.three = null; }
   clearInterval(VO.timer); VO.timer = null;
   clearInterval(VO.waTimer); VO.waTimer = null;
   document.removeEventListener('keydown', voKey);
@@ -247,6 +282,7 @@ function voPick(id) {
 function voKey(e) { if (e.key === 'Escape' && VO.chat && !document.querySelector('.cfm:not(.hidden), .fv:not(.hidden)')) voChatClose(); }
 
 function voHover(id, on) {
+  if (VO.three) VO.three.setHot(id, on);
   document.querySelectorAll(`#officePage [data-agent="${CSS.escape(id)}"]`).forEach((n) => n.classList.toggle('hot', on));
   const card = document.getElementById('voCard');
   if (!card) return;
@@ -272,12 +308,14 @@ function voStatus() {
   if (waPage !== 'office') return;
   for (const a of AGENTS) {
     const busy = voBusy(a.id);
+    if (VO.three) VO.three.setState(a.id, { busy, talk: !!VO.chat && VO.chat.agentId === a.id });
     document.querySelectorAll(`#officePage [data-agent="${CSS.escape(a.id)}"]`).forEach((n) => {
       n.classList.toggle('busy', busy);
       n.classList.toggle('talk', !!VO.chat && VO.chat.agentId === a.id);
     });
   }
   document.querySelectorAll('#officePage [data-agent="aurix"]').forEach((n) => n.classList.toggle('talk', !!VO.chat && VO.chat.agentId === 'aurix'));
+  if (VO.three) VO.three.setState('aurix', { talk: !!VO.chat && VO.chat.agentId === 'aurix' });
   voChatButtons();
 }
 
@@ -285,6 +323,7 @@ function voStatus() {
 
 const voClamp = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
 function voApply() {
+  if (VO.three) return;   // the 3D scene follows its stage with a ResizeObserver
   const stage = document.getElementById('voStage');
   const world = document.getElementById('voWorld');
   const cam = document.getElementById('voCam');
@@ -298,9 +337,9 @@ function voApply() {
   world.style.left = -VO.W / 2 + 'px'; world.style.top = -VO.D / 2 + 'px';
   cam.style.transform = `translateY(${Math.round(stage.clientHeight * 0.01)}px) scale(${(fit * VO.zoom).toFixed(3)})`;
 }
-function voTurn(d) { VO.rz = voClamp(VO.rz + d, VO_LIMITS.rz); voApply(); }
-function voZoom(f) { VO.zoom = voClamp(VO.zoom * f, VO_LIMITS.zoom); voApply(); }
-function voReset() { VO.rz = 40; VO.rx = 58; VO.zoom = 1; voApply(); }
+function voTurn(d) { if (VO.three) { VO.three.turn(d); return; } VO.rz = voClamp(VO.rz + d, VO_LIMITS.rz); voApply(); }
+function voZoom(f) { if (VO.three) { VO.three.zoom(f); return; } VO.zoom = voClamp(VO.zoom * f, VO_LIMITS.zoom); voApply(); }
+function voReset() { if (VO.three) { VO.three.reset(); return; } VO.rz = 40; VO.rx = 58; VO.zoom = 1; voApply(); }
 
 function voDown(e) {
   if (e.button !== undefined && e.button !== 0) return;
@@ -369,6 +408,7 @@ function voChatOpen(id) {
     </form>`;
   voStatus();
   voApply();
+  if (VO.three) VO.three.focus(id);   // the camera moves in on the agent
   voChatLoad(seq);
   if (!isMobile()) setTimeout(() => { const t = document.getElementById('voTa'); if (t) t.focus(); }, 50);
 }
@@ -382,6 +422,7 @@ function voChatClose() {
   if (vo) vo.classList.remove('chatting');
   voStatus();
   voApply();
+  if (VO.three) VO.three.reset();
 }
 
 // The full chat page: attachments, session list, voice.
@@ -534,9 +575,10 @@ async function voChatPoll(convId, seq) {
 
 // The reply also shows as a speech bubble over the agent's head for a while.
 function voSay(id, text) {
+  let plain = String(text || '').replace(/[*_`#>]+/g, '').replace(/\s+/g, ' ').trim();
+  if (VO.three) { VO.three.say(id, plain.length > 110 ? plain.slice(0, 108) + '…' : plain); return; }
   const desk = document.querySelector(`#officePage .vo-desk[data-agent="${CSS.escape(id)}"]`);
   if (!desk) return;
-  const plain = String(text || '').replace(/[*_`#>]+/g, '').replace(/\s+/g, ' ').trim();
   desk.querySelector('.vo-say').textContent = plain.length > 110 ? plain.slice(0, 108) + '…' : plain;
   desk.classList.add('said');
   clearTimeout(VO.sayTimers[id]);
@@ -568,6 +610,7 @@ function voAurixOpen(groupId) {
     <div class="vo-wa-foot"><span>Hanya baca — Aurix membalas di WhatsApp</span>
       <button type="button" class="wa-btn ghost btn-sm" onclick="voChatClose();openWaPage('summary')">✨ Ringkas grup</button></div>`;
   voStatus(); voApply();
+  if (VO.three && !groupId) VO.three.focus('aurix');
   voWaRefresh(true);
   clearInterval(VO.waTimer);
   VO.waTimer = setInterval(() => voWaRefresh(false), 15000);

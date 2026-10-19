@@ -1550,3 +1550,19 @@ img.ds-avi{object-fit:cover;background:#F4F4F8;border:1.5px solid rgba(201,168,7
 #voWaHideBtn{color:#B91C1C;}
 .cfm-check{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:#3A3A52;margin:12px 0 14px;line-height:1.45;cursor:pointer;}
 .cfm-check input{margin-top:2px;accent-color:#B91C1C;}
+
+/* Virtual Office in three.js (EPIC-018 T-113) */
+.vo-stage.three{cursor:grab;}
+.vo-stage.three:active{cursor:grabbing;}
+.vo3-canvas{display:block;position:absolute;inset:0;touch-action:none;outline:none;}
+.vo3-labels{position:absolute;top:0;left:0;pointer-events:none;}
+.vo3-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;font-size:13px;color:#5A5A72;}
+.vo3-tag{pointer-events:auto;cursor:pointer;display:flex;align-items:center;gap:6px;background:rgba(17,17,24,.84);color:#fff;border-radius:16px;padding:3px 11px 3px 3px;font:700 12px/1 var(--font);white-space:nowrap;box-shadow:0 6px 16px rgba(0,0,0,.25);transition:background .15s,color .15s,transform .15s;user-select:none;-webkit-user-select:none;}
+.vo3-tag img{width:24px;height:24px;border-radius:50%;object-fit:cover;border:2px solid var(--ac);}
+.vo3-tag.hot{background:var(--ac);color:#111118;transform:scale(1.08);}
+.vo3-bubble{opacity:0;transition:opacity .25s;pointer-events:none;}
+.vo3-bubble.busy,.vo3-bubble.said{opacity:1;}
+.vo3-bubble span{display:none;position:relative;background:#fff;color:#3A3A52;font:600 12px/1.4 var(--font);padding:6px 11px;border-radius:12px;box-shadow:0 6px 16px rgba(0,0,0,.18);}
+.vo3-bubble span::after{content:'';position:absolute;left:50%;bottom:-5px;margin-left:-5px;border:5px solid transparent;border-bottom:0;border-top-color:#fff;}
+.vo3-bubble.busy .wait{display:block;white-space:nowrap;}
+.vo3-bubble.said:not(.busy) .say{display:-webkit-box;max-width:240px;font-weight:500;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}

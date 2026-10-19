@@ -71,3 +71,20 @@ test('Aurix stands at the meeting table; clicking opens the WhatsApp group reade
   assert.ok(fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'agents', 'aurix.jpg')));
   assert.ok(fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'agents', 'aurix-full.png')));
 });
+
+// EPIC-018 T-113: three.js scene, vendored and pinned, CSS room as the fallback.
+test('three.js office: vendored three 0.170.0 via the import map, loaded lazily, CSS fallback kept', () => {
+  const pub = path.join(__dirname, '..', 'public');
+  const html = fs.readFileSync(path.join(pub, 'index.html'), 'utf8');
+  assert.match(html, /<script type="importmap">\{ "imports": \{ "three": "\/vendor\/three\/three\.module\.min\.js", "three\/addons\/": "\/vendor\/three\/addons\/" \} \}<\/script>/);
+  for (const f of ['three.module.min.js', 'addons/controls/OrbitControls.js', 'addons/geometries/RoundedBoxGeometry.js', 'addons/environments/RoomEnvironment.js', 'addons/renderers/CSS2DRenderer.js', 'LICENSE']) {
+    assert.ok(fs.existsSync(path.join(pub, 'vendor', 'three', f)), f);
+  }
+  assert.match(fs.readFileSync(path.join(pub, 'vendor', 'README.txt'), 'utf8'), /three\.js 0\.170\.0/);
+  assert.match(src, /import\('\/office3d\.js'\)/, 'lazy: only when the office opens');
+  assert.match(src, /if \(!voWebGL\(\)\) \{ voMountCss\(stage\); return; \}/, 'no WebGL: the CSS room');
+  const three = fs.readFileSync(path.join(pub, 'office3d.js'), 'utf8');
+  assert.match(three, /^export \{ mount \};$/m);
+  for (const api of ['setState(', 'setHot(', 'say(', 'turn(', 'zoom(', 'focus,', 'dispose()']) assert.ok(three.includes(api), api);
+  assert.ok(!/https?:\/\//.test(three.replace(/\/\/[^\n]*/g, '')), 'no network URLs in the scene code');
+});

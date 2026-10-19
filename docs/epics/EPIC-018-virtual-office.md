@@ -8,7 +8,7 @@ area: Frontend
 retries: 0
 prd: ../product/PRD.md
 stories: US-VO-1 … US-VO-2
-tasks: T-107 … T-112
+tasks: T-107 … T-113
 
 ## Goal
 
@@ -56,6 +56,16 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   Group); pilih grup → percakapan bergaya WhatsApp, muat pesan lama, muat ulang
   tiap 15 dtk, pesan baru muncul sebagai gelembung di atas Aurix; tombol ke halaman
   Pilih Group dan Summary Chat.
+- T-113 three.js (pemilik: "pakai three.js, lebih detail dan realistis"; izin unduh
+  diberikan di chat). three.js 0.170.0 (MIT) di `public/vendor/three/` lewat import
+  map, dimuat hanya saat Virtual Office dibuka (`public/office3d.js`). Material PBR,
+  tone mapping ACES, pantulan RoomEnvironment, bayangan lembut, dinding belakang
+  berlubang jendela sehingga matahari masuk ke lantai (siang/senja; malam: lampu meja
+  menyala), tekstur prosedural (lantai kayu, karpet, langit kota, papan tugas, logo,
+  jam WIB, layar per peran agent). Orang 3D duduk dan mengetik saat membalas, Aurix
+  sebagai robot 3D mengikuti maskotnya. Kamera OrbitControls dibatasi di sisi terbuka;
+  klik agent = panel chat + kamera mendekat, tutup = kembali. Tanpa WebGL: ruangan
+  CSS 3D lama tetap dipakai.
 
 ## Acceptance Criteria
 
@@ -101,6 +111,12 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   bagian atasnya masuk ke meja. Perbaikan: `voStandee` (tegak, hanya berputar di
   sumbu vertikal; tinggi dikompensasi 1/sin(kemiringan)), posisi digeser ke
   x=1058. Dicek dari beberapa sudut kamera (rz 10/40/55/80, rx 42/58).
+- 2026-10-19 T-113 three.js. Diuji dengan Chromium headless + SwiftShader di instance
+  uji (Hermes tiruan): ruangan lengkap, Aurix + daftar grup, chat Nana (kamera
+  mendekat, cincin, gelembung balasan), ponsel, cadangan CSS saat `voWebGL()` false.
+  Bug ditemukan & diperbaiki: komentar menelan `scene.add(robot)`; boot memanggil
+  `switchAgent` yang menutup halaman yang baru dibuka (sekarang `switchAgent(id,
+  keepPage)`). Tes 155/155, gates PASS.
 
 ## Dependencies
 
