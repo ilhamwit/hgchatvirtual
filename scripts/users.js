@@ -16,6 +16,7 @@ const USAGE = `Usage: node scripts/users.js <command> [args]
   reset-password <username>                          set a new password, ends their sessions
   disable <username>                                 block login and end all sessions
   enable <username>                                  allow login again
+  set-role <username> admin|member                   make someone an admin, or a member again
   revoke-sessions <username>                         log the user out everywhere
   list                                               show all users
   audit [N]                                          show the last N audit events (default 30)
@@ -118,6 +119,14 @@ async function main(argv) {
       log('user_enabled');
       console.log(`enabled "${username}"`);
       break;
+    case 'set-role': {
+      needUser();
+      const role = flags.positional[1];
+      const before = auth.setRole(db, username, role);
+      log('role_changed', `${before} -> ${role}`);
+      console.log(before === role ? `"${username}" is already ${role}` : `"${username}" is now ${role} (was ${before})`);
+      break;
+    }
     case 'revoke-sessions': {
       needUser();
       const user = auth.getUserByUsername(db, username);

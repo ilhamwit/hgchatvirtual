@@ -63,6 +63,7 @@ node scripts/users.js list
 node scripts/users.js reset-password irfan            # juga mengakhiri sesinya
 node scripts/users.js disable irfan                   # blokir + logout di semua perangkat
 node scripts/users.js enable irfan
+node scripts/users.js set-role irfan admin             # jadikan admin (atau member); berlaku seketika
 node scripts/users.js revoke-sessions irfan           # logout di semua perangkat
 ```
 

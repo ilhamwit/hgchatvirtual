@@ -135,3 +135,23 @@ test('audit trail: failed, throttled, successful logins, logout and CLI changes'
   assert.match(audit, /user_disabled\s+irfan\s+cli\s+by \S+/);
   assert.ok(!audit.includes('wrong-password') && !audit.includes('guess-'), 'attempted passwords are never stored');
 });
+
+test('set-role makes someone admin at once, and is audited', async () => {
+  const srv = await startServer([{ username: 'irfan', password: 'irfan-password-1' }]);
+  try {
+    const run = (...args) => execFileSync(process.execPath, [path.join(ROOT, 'scripts/users.js'), ...args], { env: { PATH: process.env.PATH, CHAT_DB_PATH: srv.dbPath }, encoding: 'utf8' });
+    const { cookie } = await srv.login('irfan', 'irfan-password-1');
+    assert.strictEqual((await srv.json(cookie, 'GET', '/api/integrations/keys')).status, 403);
+    assert.match(run('set-role', 'irfan', 'admin'), /"irfan" is now admin \(was member\)/);
+    assert.strictEqual((await srv.json(cookie, 'GET', '/api/integrations/keys')).status, 200, 'same session, no new login');
+    assert.strictEqual((await srv.json(cookie, 'GET', '/api/me')).body.role, 'admin');
+    assert.match(run('set-role', 'irfan', 'admin'), /already admin/);
+    assert.throws(() => run('set-role', 'irfan', 'owner'), /role must be admin or member/);
+    assert.throws(() => run('set-role', 'nobody', 'admin'), /no user "nobody"/);
+    assert.match(run('audit', '10'), /role_changed\s+irfan\s+cli\s+by \S+, member -> admin/);
+    run('set-role', 'irfan', 'member');
+    assert.strictEqual((await srv.json(cookie, 'GET', '/api/integrations/keys')).status, 403);
+  } finally {
+    await srv.stop();
+  }
+});
