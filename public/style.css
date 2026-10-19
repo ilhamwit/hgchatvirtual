@@ -1129,3 +1129,14 @@ img.ds-avi{object-fit:cover;background:#F4F4F8;border:1.5px solid rgba(201,168,7
 .hist-empty::before{content:'🕘';display:flex;width:44px;height:44px;border-radius:12px;background:rgba(201,168,76,.14);align-items:center;justify-content:center;font-size:20px;}
 .tf-empty-ic,.rp-blank-ic,.sc-empty-ic{border-radius:14px;}
 .sc-empty-ic{width:56px;height:56px;margin:0 auto 6px;background:rgba(201,168,76,.14);display:flex;align-items:center;justify-content:center;font-size:26px;}
+
+/* ── Coming soon pages ── */
+.wa-box.soon{text-align:center;padding:36px 32px 28px;}
+.wa-box.soon .rp-blank-ic{margin:0 auto 14px;}
+.wa-box.soon .rp-kind{margin-bottom:10px;}
+.wa-box.soon h2{margin:0 0 8px;font-size:20px;color:#111118;}
+.wa-box.soon p{margin:0 auto 16px;max-width:520px;font-size:13px;line-height:1.65;color:#5A5A72;}
+.wa-box.soon ul{display:inline-flex;flex-direction:column;align-items:flex-start;gap:6px;margin:0 0 18px;padding:0;list-style:none;text-align:left;}
+.wa-box.soon li{font-size:12.5px;color:#3A3A52;padding-left:22px;position:relative;}
+.wa-box.soon li::before{content:'✓';position:absolute;left:0;color:#8A6D1F;font-weight:800;}
+.wa-box.soon a{color:#8A6D1F;font-weight:600;}

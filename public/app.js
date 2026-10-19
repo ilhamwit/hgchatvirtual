@@ -900,7 +900,9 @@ const WA_PAGES = {
   discuss: { title: 'Diskusi tim', crumb: 'Chat & Discussion', hash: 'discuss' },
   profile: { title: 'Profil & notifikasi', crumb: 'Akun', hash: 'profile' },
   settings: { title: 'Pengaturan tim', crumb: 'Settings', hash: 'settings' },
-  reports: { title: 'Laporan', crumb: 'Reports', hash: 'reports' }
+  reports: { title: 'Laporan', crumb: 'Reports', hash: 'reports' },
+  performance: { title: 'Performance', crumb: 'Tools', hash: 'performance' },
+  automation: { title: 'Automation', crumb: 'Tools', hash: 'automation' }
 };
 const pageHash = (key) => '#' + (WA_PAGES[key].hash || 'wa-' + key);
 let waPage = null;
@@ -2945,6 +2947,24 @@ async function rpBadge() { try { rpBadgeSet((await api('GET', '/api/reports/unre
 meReady.then(rpBadge);
 setInterval(rpBadge, 5 * 60 * 1000);
 
+/* ── Coming soon: Performance, Automation ─────────────
+   Real menu items that say what is planned, instead of doing nothing. */
+const SOON = {
+  performance: { icon: '📈', title: 'Performance', text: 'Angka tim dalam satu pandangan: tugas selesai dan terlambat per orang per minggu, acara yang terlaksana, seberapa sering tiap agent dipakai, dan aktivitas diskusi.',
+    items: ['Tugas selesai & terlambat per orang', 'Acara terlaksana vs dibatalkan', 'Pemakaian agent & tingkat keberhasilan', 'Aktivitas Chat & Discussion'] },
+  automation: { icon: '⚡', title: 'Automation', text: 'Hal yang Chat Center kerjakan sendiri, dengan saklar nyala/mati dan jadwal dalam bahasa biasa — tanpa istilah teknis.',
+    items: ['Ringkasan tugas harian ke grup pukul 08.00', 'Pengingat tenggat tugas H-1', 'Laporan mingguan tim ke grup', 'Ringkasan grup WhatsApp tiap 6 jam'] }
+};
+function soonOpen(key) {
+  const c = SOON[key];
+  document.getElementById(key + 'Page').innerHTML = `<div class="wa-grid"><div class="wa-box soon">
+      <div class="rp-blank-ic">${c.icon}</div><span class="rp-kind">Segera hadir</span>
+      <h2>${escapeHtml(c.title)}</h2><p>${escapeHtml(c.text)}</p>
+      <ul>${c.items.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul>
+      <div class="wa-sub">Menu ini sedang disiapkan. Masukan tentang apa yang paling berguna bisa disampaikan di <a href="#discuss" onclick="event.preventDefault();openWaPage('discuss')">#umum</a>.</div>
+    </div></div>`;
+}
+
 /* ── Page registry: one container per WhatsApp page ── */
 const WA_IMPL = {
   connect: { el: 'waConnect', open: waConnectOpen, close: waConnectClose },
@@ -2955,7 +2975,9 @@ const WA_IMPL = {
   discuss: { el: 'discussPage', open: dsOpen, close: dsClose },
   profile: { el: 'profilePage', open: pfOpen, close: pfClose },
   settings: { el: 'settingsPage', open: stOpen, close: stClose },
-  reports: { el: 'reportsPage', open: rpOpen, close: rpClose }
+  reports: { el: 'reportsPage', open: rpOpen, close: rpClose },
+  performance: { el: 'performancePage', open: () => soonOpen('performance'), close: () => {} },
+  automation: { el: 'automationPage', open: () => soonOpen('automation'), close: () => {} }
 };
 function closeWaPages() { for (const p of Object.values(WA_IMPL)) p.close(); }
 

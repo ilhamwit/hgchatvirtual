@@ -16,7 +16,7 @@ test('sidebar shows the WhatsApp items directly, in order, above Tools', () => {
   const order = [...section.matchAll(/<div class="nav-item" data-wa="(\w+)" onclick="openWaPage\('(\w+)'\)">[\s\S]*?<\/span>\s*([^<]+?)\s*<\/div>/g)]
     .map((m) => [m[1], m[3], m[1] === m[2]]);
   assert.deepStrictEqual(order, ITEMS.map(([k, label]) => [k, label, true]));
-  assert.doesNotMatch(html + js, /toggleWaMenu|waSub|nav-group|data-wa="inbox"|Segera hadir/, 'no dropdown, no Inbox, no placeholder');
+  assert.doesNotMatch(html + js, /toggleWaMenu|waSub|nav-group|data-wa="inbox"/, 'no dropdown, no Inbox');
 });
 
 test('every item has a title and a page container wired in app.js', () => {
@@ -129,7 +129,7 @@ test('Settings opens #settings; team accounts, keys and system; own password on 
   assert.match(html, /id="settingsPage"/);
   for (const p of ['/api/settings/users', '/api/settings/status', '/api/profile/password']) assert.ok(js.includes(p), p);
   assert.match(js, /if \(!ME \|\| ME\.role !== 'admin'\) \{/, 'members get a notice, not the page');
-  assert.ok((html.match(/onclick="navClick\(this\)"/g) || []).length <= 3, 'Settings is no longer decorative');
+  assert.strictEqual((html.match(/onclick="navClick\(this\)"/g) || []).length, 0, 'no decorative menu items are left');
 });
 
 // EPIC-015: Reports is a real page with a real badge.
@@ -140,5 +140,8 @@ test('Reports opens #reports with a live unread badge', () => {
   assert.match(js, /\breports: \{ el: 'reportsPage', open: rpOpen, close: rpClose \}/);
   assert.match(html, /<div class="wa-page wa-full hidden" id="reportsPage">/);
   assert.match(js, /api\('GET', '\/api\/reports\/unread'\)/);
-  assert.strictEqual((html.match(/onclick="navClick\(this\)"/g) || []).length, 2, 'only Performance and Automation are still decorative');
+  for (const k of ['performance', 'automation']) {
+    assert.match(html, new RegExp(`data-wa="${k}" onclick="openWaPage\\('${k}'\\)"`), k);
+    assert.match(js, new RegExp(`\\b${k}: \\{ el: '${k}Page', open: \\(\\) => soonOpen\\('${k}'\\)`), k + ' is a coming-soon page');
+  }
 });
