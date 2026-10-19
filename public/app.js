@@ -112,11 +112,46 @@ document.addEventListener('click',e=>{
   if(!e.target.closest('#agentSel')&&!e.target.closest('#agentDrop')) closeDrop();
 });
 
-function toggleSockets() {
-  sockOpen=!sockOpen;
+function toggleSockets(open) {
+  sockOpen = typeof open === 'boolean' ? open : !sockOpen;
   document.getElementById('socketsPanel').classList.toggle('closed',!sockOpen);
   document.getElementById('sockToggleBtn').classList.toggle('on',sockOpen);
 }
+
+/* ── Mobile (≤760px): the sidebar is a drawer, the chat history a full-width panel ── */
+const MOBILE_MQ = window.matchMedia('(max-width:760px)');
+const isMobile = () => MOBILE_MQ.matches;
+// Up to tablet width the chat history floats over the chat instead of taking a column.
+const OVERLAY_MQ = window.matchMedia('(max-width:1100px)');
+const historyFloats = () => OVERLAY_MQ.matches;
+// List → detail pages on a phone: the page gets .m-detail while a detail is open.
+function mDetail(pageId, on) { const el = document.getElementById(pageId); if (el) el.classList.toggle('m-detail', !!on); }
+const M_BACK = (fn) => `<button type="button" class="m-back" onclick="${fn}" aria-label="Kembali" title="Kembali"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>`;
+// Panels stacked under a list (schedule, tasks): bring the opened one into view.
+function mReveal(id) { if (isMobile()) requestAnimationFrame(() => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); }
+function toggleNav(open) {
+  const on = typeof open === 'boolean' ? open : !document.body.classList.contains('nav-open');
+  document.body.classList.toggle('nav-open', on);
+  const btn = document.getElementById('navBtn');
+  if (btn) btn.setAttribute('aria-expanded', String(on));
+}
+// Picking anything in the drawer closes it.
+document.getElementById('sidebar').addEventListener('click', (e) => {
+  if (isMobile() && e.target.closest('.nav-item, .sb-agent-item, .sb-user')) toggleNav(false);
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('nav-open')) toggleNav(false); });
+// On a phone the history starts closed (the chat gets the whole screen);
+// crossing the breakpoint resets both panels.
+function syncLayout() { toggleNav(false); toggleSockets(!historyFloats()); }
+MOBILE_MQ.addEventListener('change', syncLayout);
+OVERLAY_MQ.addEventListener('change', syncLayout);
+if (historyFloats()) syncLayout();
+// A floating history closes when you tap outside it.
+document.addEventListener('click', (e) => {
+  if (!sockOpen || !historyFloats() || isMobile()) return;
+  if (e.target.closest('#socketsPanel, #sockToggleBtn, #ctxMenu, #confirmBox, #fileViewer, .sidebar, .topbar')) return;
+  toggleSockets(false);
+});
 
 function navClick(el) {
   showChatView();
@@ -490,12 +525,14 @@ function confirmDialog(title, text, okLabel) {
 function openConversation(agentId, convId) {
   activeConv[agentId] = convId;
   switchAgent(agentId);
+  if (historyFloats()) toggleSockets(false);
 }
 
 function newChat() {
   activeConv[current.id] = null;
   switchAgent(current.id);
-  document.getElementById('chatTa').focus();
+  if (historyFloats()) toggleSockets(false);
+  if (!isMobile()) document.getElementById('chatTa').focus();
 }
 
 function showWelcome(show) {
@@ -1047,6 +1084,7 @@ const waG = { groups: [], current: null, messages: [], hasMore: false, timer: nu
 
 function waGroupsOpen() {
   waGroupsClose();
+  mDetail('waGroupsPage', false);
   const el = document.getElementById('waGroupsPage');
   el.innerHTML = `<div class="wag-list"><div class="wag-list-head">Grup WhatsApp <button class="wa-btn ghost" type="button" style="padding:5px 10px" onclick="waGroupsRefresh(true)">Muat ulang</button></div>
     <div class="wag-note">${WA_LIMITS_NOTE}</div><div class="wag-items" id="wagItems"><div class="wag-empty">Memuat…</div></div></div>
@@ -1089,6 +1127,7 @@ function renderWaGroupList() {
 }
 
 function waOpenGroup(id) {
+  mDetail('waGroupsPage', true);
   waG.current = id;
   waG.messages = [];
   renderWaGroupList();
@@ -1160,7 +1199,7 @@ function renderWaChat(group, scroll) {
   }).join('');
   const box = document.getElementById('wagMsgs');
   const keep = box ? box.scrollTop : 0;
-  document.getElementById('wagChat').innerHTML = `<div class="wag-chat-head"><div class="wag-avi" style="background:${waColor(g.id)}">${escapeHtml(waGroupName(g).charAt(0).toUpperCase())}</div>
+  document.getElementById('wagChat').innerHTML = `<div class="wag-chat-head">${M_BACK("mDetail('waGroupsPage', false)")}<div class="wag-avi" style="background:${waColor(g.id)}">${escapeHtml(waGroupName(g).charAt(0).toUpperCase())}</div>
       <div><div class="wag-chat-title">${escapeHtml(waGroupName(g))}</div><div class="wag-chat-sub">${g.participants ? g.participants + ' anggota · ' : ''}${waG.messages.length} pesan dimuat</div></div>
       <span class="wag-ro">Hanya baca</span>
       <span class="wag-upd" id="wagUpdated">${waG.updatedAt ? 'Diperbarui ' + waClock(waG.updatedAt) : ''}</span>
@@ -1442,7 +1481,7 @@ function schDay(iso) {
   if (evs.length === 1) { schShow(evs[0].id); return; }
   schStopPoll();
   sch.panel = 'day'; sch.dayIso = iso; sch.cur = null;
-  schRenderPanel();
+  schRenderPanel(); mReveal('scPanel');
 }
 
 function schRenderPanel() {
@@ -1485,14 +1524,15 @@ function schNew(date) {
   sch.panel = 'form'; sch.cur = null;
   sch.editing = { id: null, title: pre.title || '', date: date && date >= today ? date : today, time: '10:00', durationMin: 60, location: '', attendees: '', notes: pre.notes || '', groups: [], reminders: (sch.options && sch.options.defaultReminders) || ['d1', 'm60'] };
   schRenderCal(); schRenderPanel();
-  setTimeout(() => { const t = document.getElementById('scTitle'); if (t) t.focus(); }, 0);
+  if (isMobile()) mReveal('scPanel');
+  else setTimeout(() => { const t = document.getElementById('scTitle'); if (t) t.focus(); }, 0);
 }
 function schEdit() {
   const e = sch.cur.event;
   schStopPoll();
   sch.panel = 'form';
   sch.editing = { id: e.id, title: e.title, date: e.date, time: e.time, durationMin: e.durationMin, location: e.location || '', attendees: e.attendees || '', notes: e.notes || '', groups: e.groups.map((g) => g.id), reminders: e.reminders, sent: e.status === 'sent' };
-  schRenderPanel();
+  schRenderPanel(); mReveal('scPanel');
 }
 
 function schFormHtml() {
@@ -1556,7 +1596,7 @@ async function schShow(id) {
   try { sch.cur = await api('GET', '/api/events/' + id); }
   catch (e) { showToast('Gagal memuat acara: ' + e.message); return; }
   if (waPage !== 'schedule' || sch.panel !== 'event') return;
-  schRenderCal(); schRenderPanel(); schPollIfNeeded();
+  schRenderCal(); schRenderPanel(); schPollIfNeeded(); mReveal('scPanel');
 }
 
 // While Aurix writes, or the bot is still sending, refresh the panel.
@@ -1882,7 +1922,7 @@ async function tfShow(id) {
   try { tf.cur = await api('GET', '/api/tasks/' + id); }
   catch (e) { showToast('Gagal memuat tugas: ' + e.message); return; }
   tf.confirm = false;
-  tfRender(); tfRenderPanel();
+  tfRender(); tfRenderPanel(); mReveal('tfPanel');
 }
 function tfHide() { tf.cur = null; tf.confirm = false; tfRender(); tfRenderPanel(); }
 
@@ -2054,6 +2094,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // ── page ──
 async function dsOpen() {
   await meReady;
+  mDetail('discussPage', false);
   const el = document.getElementById('discussPage');
   el.innerHTML = `<div class="ds-side" id="dsSide"><div class="wa-msg"><span class="wa-spin"></span>Memuat…</div></div>
     <div class="ds-main">
@@ -2071,7 +2112,7 @@ async function dsOpen() {
   try { last = Number(localStorage.getItem('ds.room')); } catch (e) { /* private mode */ }
   const first = dsRoom(last) || ds.rooms.find((x) => x.name === 'umum') || ds.rooms[0];
   dsRenderSide();
-  if (first) dsShowRoom(first.id);
+  if (first) dsShowRoom(first.id, true);
 }
 function dsClose() { ds.cur = null; ds.thread = null; }
 
@@ -2107,10 +2148,13 @@ function dsRenderHead() {
       <button type="button" class="ds-topic" onclick="dsEditTopic()" title="Ubah topik">${r.topic ? escapeHtml(r.topic) : '<i>Tambahkan topik…</i>'}</button></div>
       <span class="ds-head-n">${ds.online.size} online</span>`;
   }
+  el.insertAdjacentHTML('afterbegin', M_BACK("mDetail('discussPage', false)"));
   el.insertAdjacentHTML('beforeend', '<button type="button" class="ds-sum-btn" onclick="dsSummary()" title="Ringkas diskusi oleh Aurix">✨ Ringkas</button>');
 }
 
-async function dsShowRoom(id) {
+async function dsShowRoom(id, auto) {
+  // On a phone the channel list shows first; tapping a room opens it full screen.
+  if (!auto) mDetail('discussPage', true);
   ds.cur = dsRoom(id) || { id };
   ds.thread = null;
   document.getElementById('dsThread').classList.add('hidden');
@@ -2126,7 +2170,7 @@ async function dsShowRoom(id) {
   dsRenderMsgs(true);
   dsMarkRead();
   const ta = document.getElementById('dsTa-main');
-  if (ta) { ta.placeholder = 'Tulis pesan ke ' + dsRoomName(ds.cur) + '… (@ untuk menyebut)'; ta.focus(); }
+  if (ta) { ta.placeholder = 'Tulis pesan ke ' + dsRoomName(ds.cur) + '… (@ untuk menyebut)'; if (!isMobile()) ta.focus(); }
 }
 
 async function dsOpenDm(username) {
@@ -2830,6 +2874,7 @@ const RP_ICON = { wa_summary: '💬', wa_digest: '🤖', discussion: '🗣️', 
 async function rpOpen() {
   await meReady;
   rp.cur = null; rpStopPoll();
+  mDetail('reportsPage', false);
   document.getElementById('reportsPage').innerHTML = `<div class="rp-list" id="rpList"><div class="wa-msg"><span class="wa-spin"></span>Memuat laporan…</div></div>
     <div class="rp-read" id="rpRead"></div>`;
   await rpLoad();
@@ -2837,7 +2882,8 @@ async function rpOpen() {
   rpRenderRead();
   let last = null;
   try { last = Number(localStorage.getItem('rp.cur')); } catch (e) { /* private mode */ }
-  if (last && rp.list.some((r) => r.id === last)) rpShow(last);
+  // A phone starts on the list; a wide screen reopens the last report beside it.
+  if (last && rp.list.some((r) => r.id === last) && !isMobile()) rpShow(last);
 }
 function rpClose() { rp.cur = null; rpStopPoll(); }
 function rpStopPoll() { clearTimeout(rp.poll); rp.poll = null; }
@@ -2873,7 +2919,7 @@ async function rpShow(id) {
   try { localStorage.setItem('rp.cur', id); } catch (e) { /* private mode */ }
   const it = rp.list.find((r) => r.id === id);
   if (it && it.unread && rp.cur.status === 'done') { it.unread = false; rpBadgeSet(Math.max(0, (rp.unread || 0) - 1)); }
-  rpRenderList(); rpRenderRead();
+  rpRenderList(); rpRenderRead(); mDetail('reportsPage', true);
   if (rp.cur.status === 'running') rp.poll = setTimeout(() => { if (rp.cur && rp.cur.id === id) { rpLoad(); rpShow(id); } }, 2500);
 }
 
@@ -2891,7 +2937,7 @@ function rpRenderRead() {
       : `<article class="rp-body was-result">${formatMsg(r.body)}</article>`;
   const canDelete = ME && (ME.role === 'admin' || (r.createdBy && r.createdBy === ME.displayName));
   const sent = r.sentTo.length ? `<div class="rp-sent">Dikirim ke ${r.sentTo.map((g) => escapeHtml(g.name || g.id)).join(', ')}</div>` : '';
-  el.innerHTML = `<div class="rp-read-h">
+  el.innerHTML = `<div class="rp-read-h">${M_BACK("mDetail('reportsPage', false)")}
       <div class="rp-read-t"><span class="rp-kind">${RP_ICON[r.kind] || '📄'} ${escapeHtml(r.kindLabel)}</span><h2>${escapeHtml(r.title)}</h2>
         <div class="wa-sub">${escapeHtml([r.subtitle, r.createdBy ? 'oleh ' + r.createdBy : r.agent ? 'oleh ' + (r.agent === 'bot' ? 'bot WhatsApp' : r.agent.charAt(0).toUpperCase() + r.agent.slice(1)) : null, schWibStamp(r.createdAt)].filter(Boolean).join(' · '))}</div></div>
       ${r.status === 'done' ? `<div class="rp-read-acts">
@@ -2932,7 +2978,7 @@ async function rpSend(form) {
 async function rpDelete() {
   if (!(await confirmDialog('Hapus laporan ini?', 'Laporan dihapus dari arsip untuk semua orang.', 'Hapus'))) return;
   try { await api('DELETE', '/api/reports/' + rp.cur.id); } catch (e) { showToast(e.message); return; }
-  rp.cur = null; try { localStorage.removeItem('rp.cur'); } catch (e) { /* private mode */ }
+  rp.cur = null; mDetail('reportsPage', false); try { localStorage.removeItem('rp.cur'); } catch (e) { /* private mode */ }
   await rpLoad(); rpRenderRead(); showToast('Laporan dihapus');
 }
 

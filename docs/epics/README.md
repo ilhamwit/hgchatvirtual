@@ -30,6 +30,7 @@ riwayat tersimpan di server, dan agent yang benar-benar membantu kerja tim.
 | [EPIC-014](EPIC-014-settings.md)                       | Phase 2 | Settings: akun tim, API key, status      | P1       | ready-for-qa |
 | [EPIC-015](EPIC-015-reports.md)                        | Phase 2 | Reports: arsip laporan agent, mingguan   | P1       | ready-for-qa |
 | [EPIC-016](EPIC-016-voice-mode.md)                     | Phase 3 | Voice mode: ngobrol suara dengan agent   | P1       | on-progress |
+| [EPIC-017](EPIC-017-mobile-responsive.md)              | Phase 3 | Mobile responsive yang rapi              | P1       | ready-for-qa |
 
 **Definition of MVP:** selesainya EPIC-000 → EPIC-002.
 

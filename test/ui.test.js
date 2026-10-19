@@ -165,3 +165,21 @@ test('voice mode: WhatsApp-call style controls (round mute, red hang-up, call cl
   assert.match(css, /\.vc-btn\.end\{background:#EA0038;\}/);
   assert.match(css, /\.vc-btn\{width:64px;height:64px;border-radius:50%;/);
 });
+
+// Mobile layout: drawer menu, floating history, list → detail pages.
+test('mobile: menu drawer, history panel, list/detail pages, no iOS input zoom', () => {
+  assert.match(html, /<button class="tb-nav" id="navBtn" type="button" onclick="toggleNav\(\)" aria-label="Buka menu"/);
+  assert.match(html, /<div class="nav-scrim" id="navScrim" onclick="toggleNav\(false\)"><\/div>/);
+  assert.match(html, /class="sk-close" type="button" onclick="toggleSockets\(\)"/);
+  assert.match(css, /body\.nav-open \.sidebar\{transform:none;/);
+  assert.match(css, /@media \(min-width:761px\) and \(max-width:1100px\)\{/, 'tablet: the history floats');
+  assert.match(css, /input:not\(\[type=checkbox\]\):not\(\[type=radio\]\):not\(\[type=range\]\),select,textarea\{font-size:16px !important;\}/);
+  for (const page of ['discussPage', 'waGroupsPage', 'reportsPage']) {
+    assert.match(js, new RegExp(`mDetail\\('${page}', true\\)`), page + ' opens its detail');
+    assert.match(js, new RegExp(`M_BACK\\("mDetail\\('${page}', false\\)"\\)`), page + ' has a back button');
+    assert.match(css, new RegExp(`#${page}\\.m-detail`), page + ' hides the list while a detail is open');
+  }
+  assert.match(js, /if \(historyFloats\(\)\) toggleSockets\(false\);/, 'picking a session closes the floating history');
+  const login = fs.readFileSync(path.join(__dirname, '..', 'public', 'login.html'), 'utf8');
+  assert.match(login, /\.login-card\{width:calc\(100% - 32px\);/);
+});

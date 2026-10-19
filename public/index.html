@@ -15,6 +15,9 @@
 
   <!-- TOP BAR -->
   <div class="topbar">
+    <button class="tb-nav" id="navBtn" type="button" onclick="toggleNav()" aria-label="Buka menu" aria-controls="sidebar" aria-expanded="false">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+    </button>
     <div class="tb-brand">
       <img class="tb-logo-img" src="/assets/hg-logo.png" alt="HG">
       <span class="tb-title">HG <span>Chat AI Agent</span></span>
@@ -37,7 +40,7 @@
   <!-- MAIN -->
   <div class="main">
     <!-- SIDEBAR -->
-    <div class="sidebar">
+    <div class="sidebar" id="sidebar">
       <div class="sb-section">
         <div class="nav-item" data-wa="discuss" onclick="openWaPage('discuss')">
           <span class="ni"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
@@ -104,12 +107,16 @@
       </div>
     </div>
 
+    <!-- Mobile: the sidebar is a drawer; this dims the page behind it -->
+    <div class="nav-scrim" id="navScrim" onclick="toggleNav(false)"></div>
+
     <!-- CHAT HISTORY -->
     <div class="sockets" id="socketsPanel">
       <div class="sk-head">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9898B2" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
         <span class="sk-title">Chat History <span class="sk-agent" id="skAgent"></span></span>
         <button class="sk-menu" onclick="newChat()" title="Sesi chat baru" aria-label="Sesi chat baru"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        <button class="sk-close" type="button" onclick="toggleSockets()" title="Tutup riwayat" aria-label="Tutup riwayat"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
       </div>
       <div class="sk-body" id="histBody"></div>
     </div>

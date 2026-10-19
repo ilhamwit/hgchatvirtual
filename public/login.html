@@ -82,6 +82,13 @@ body{font-family:var(--font);background:var(--dark);color:#fff;display:flex;flex
 .login-status.ok{color:#22C55E;}
 
 .login-footer{position:absolute;bottom:24px;display:flex;align-items:center;gap:6px;font-size:10.5px;color:rgba(255,255,255,.18);letter-spacing:.5px;}
+/* Phones: a 16px gutter, and 16px inputs so iOS does not zoom in. */
+@media (max-width:480px){
+  .login-card{width:calc(100% - 32px);padding:36px 22px 28px;border-radius:20px;}
+  .login-brand{font-size:22px;}
+  .login-tagline{letter-spacing:2px;margin-bottom:28px;}
+  .field-input{font-size:16px;}
+}
 </style>
 </head>
 <body>
