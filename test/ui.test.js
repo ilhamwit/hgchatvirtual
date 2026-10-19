@@ -129,5 +129,16 @@ test('Settings opens #settings; team accounts, keys and system; own password on 
   assert.match(html, /id="settingsPage"/);
   for (const p of ['/api/settings/users', '/api/settings/status', '/api/profile/password']) assert.ok(js.includes(p), p);
   assert.match(js, /if \(!ME \|\| ME\.role !== 'admin'\) \{/, 'members get a notice, not the page');
-  assert.strictEqual((html.match(/onclick="navClick\(this\)"/g) || []).length, 3, 'only Performance, Reports, Automation are still decorative');
+  assert.ok((html.match(/onclick="navClick\(this\)"/g) || []).length <= 3, 'Settings is no longer decorative');
+});
+
+// EPIC-015: Reports is a real page with a real badge.
+test('Reports opens #reports with a live unread badge', () => {
+  assert.match(html, /<div class="nav-item" data-wa="reports" onclick="openWaPage\('reports'\)">[\s\S]*?Reports <span class="nb hidden" id="rpBadge"><\/span>/);
+  assert.doesNotMatch(html, /<span class="nb gray">5<\/span>/, 'the made-up 5 is gone');
+  assert.match(js, /\breports: \{ title: 'Laporan', crumb: 'Reports', hash: 'reports' \}/);
+  assert.match(js, /\breports: \{ el: 'reportsPage', open: rpOpen, close: rpClose \}/);
+  assert.match(html, /<div class="wa-page wa-full hidden" id="reportsPage">/);
+  assert.match(js, /api\('GET', '\/api\/reports\/unread'\)/);
+  assert.strictEqual((html.match(/onclick="navClick\(this\)"/g) || []).length, 2, 'only Performance and Automation are still decorative');
 });

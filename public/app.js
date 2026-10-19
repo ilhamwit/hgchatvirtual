@@ -50,11 +50,11 @@ const IMGS = {
 };
 
 const AGENTS = [
-  { id:'dave', name:'Dave', role:'Operations', img:IMGS.dave, greet:"Hi! I'm Dave.", sub:'Your dedicated Relationship Manager, ready to help.' },
-  { id:'jaden', name:'Jaden', role:'People', img:IMGS.jaden, greet:"Hey there! I'm Jaden.", sub:'Client Success is my mission — how can I assist?' },
-  { id:'joel', name:'Joel', role:'Technology', img:IMGS.joel, greet:"I'm Joel. Let's get strategic.", sub:'Data-driven insights for smarter decisions.' },
-  { id:'dylan', name:'Dylan', role:'Data', img:IMGS.dylan, greet:"Hi! Dylan here 😊", sub:'Making every interaction count — what do you need?' },
-  { id:'nana', name:'Nana', role:'Finance', img:IMGS.nana, greet:"Hi, I'm Nana! ✨", sub:'Growing business together — how can I help?' }
+  { id:'dave', name:'Dave', role:'Operasional', img:IMGS.dave, greet:'Halo! Saya Dave.', sub:'Urusan operasional harian tim — apa yang bisa saya bantu?' },
+  { id:'jaden', name:'Jaden', role:'SDM', img:IMGS.jaden, greet:'Hai, saya Jaden.', sub:'Soal orang dan tim: rekrutmen, onboarding, kebijakan.' },
+  { id:'joel', name:'Joel', role:'Teknologi', img:IMGS.joel, greet:'Saya Joel.', sub:'Website, sistem, dan hal teknis — mari kita bereskan.' },
+  { id:'dylan', name:'Dylan', role:'Data', img:IMGS.dylan, greet:'Halo! Dylan di sini 😊', sub:'Angka, laporan, dan analisis — kirim datanya ke saya.' },
+  { id:'nana', name:'Nana', role:'Keuangan', img:IMGS.nana, greet:'Hai, saya Nana! ✨', sub:'Anggaran, tagihan, dan laporan keuangan.' }
 ];
 
 let current = AGENTS[0];
@@ -71,6 +71,8 @@ function switchAgent(id) {
   document.getElementById('chAviImg').src = a.img;
   document.getElementById('chName').textContent = a.name;
   document.getElementById('chRole').textContent = a.role + ' · Online';
+  const ta = document.getElementById('chatTa');
+  if (ta) ta.placeholder = 'Tulis pesan ke ' + a.name + '…';
   document.getElementById('wcPhoto').src = a.img;
   document.getElementById('wcTitle').textContent = a.greet;
   document.getElementById('wcSub').textContent = a.sub;
@@ -120,11 +122,6 @@ function navClick(el) {
   showChatView();
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('on'));
   el.classList.add('on');
-}
-
-function setTab(btn) {
-  document.querySelectorAll('.tb-tab').forEach(b=>b.classList.remove('on'));
-  btn.classList.add('on');
 }
 
 function now() { return new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}); }
@@ -902,7 +899,8 @@ const WA_PAGES = {
   tasks: { title: 'Fokus saya', crumb: 'Task Focus', hash: 'tasks' },
   discuss: { title: 'Diskusi tim', crumb: 'Chat & Discussion', hash: 'discuss' },
   profile: { title: 'Profil & notifikasi', crumb: 'Akun', hash: 'profile' },
-  settings: { title: 'Pengaturan tim', crumb: 'Settings', hash: 'settings' }
+  settings: { title: 'Pengaturan tim', crumb: 'Settings', hash: 'settings' },
+  reports: { title: 'Laporan', crumb: 'Reports', hash: 'reports' }
 };
 const pageHash = (key) => '#' + (WA_PAGES[key].hash || 'wa-' + key);
 let waPage = null;
@@ -1050,7 +1048,7 @@ function waGroupsOpen() {
   const el = document.getElementById('waGroupsPage');
   el.innerHTML = `<div class="wag-list"><div class="wag-list-head">Grup WhatsApp <button class="wa-btn ghost" type="button" style="padding:5px 10px" onclick="waGroupsRefresh(true)">Muat ulang</button></div>
     <div class="wag-note">${WA_LIMITS_NOTE}</div><div class="wag-items" id="wagItems"><div class="wag-empty">Memuat…</div></div></div>
-    <div class="wag-chat" id="wagChat"><div class="wag-empty">Pilih grup di sebelah kiri untuk membaca percakapannya.</div></div>`;
+    <div class="wag-chat" id="wagChat"><div class="wag-empty"><div class="rp-blank"><div class="rp-blank-ic">💬</div><b>Pilih grup untuk dibaca</b><p>Percakapan grup WhatsApp yang diikuti bot tampil di sini, hanya-baca.</p></div></div></div>`;
   waG.current = null;
   waGroupsRefresh(true);
   waG.timer = setInterval(() => waGroupsRefresh(false), 15000);
@@ -2750,7 +2748,7 @@ function stUsersHtml() {
       <div class="wa-sub">Sampaikan lewat jalur pribadi. Password ini tidak ditampilkan lagi; minta yang bersangkutan menggantinya di Profil & notifikasi.</div></div>` : '';
   const rows = st.users.map((u) => {
     const me = ME && u.username === ME.username;
-    const status = u.disabled ? '<span class="wa-pill bad">Nonaktif</span>' : u.activeSessions ? `<span class="wa-pill ok">Online · ${u.activeSessions} sesi</span>` : '<span class="wa-pill wait">Aktif</span>';
+    const status = u.disabled ? '<span class="wa-pill bad">Nonaktif</span>' : u.activeSessions ? `<span class="wa-pill ok" title="${u.activeSessions} sesi">Online</span>` : '<span class="wa-pill wait">Aktif</span>';
     const acts = me ? '<span class="wa-sub">akun Anda</span>' : `
       <button class="wa-btn ghost" type="button" onclick="stSetRole('${escapeAttr(u.username)}','${u.role === 'admin' ? 'member' : 'admin'}')">${u.role === 'admin' ? 'Jadikan member' : 'Jadikan admin'}</button>
       <button class="wa-btn ghost" type="button" onclick="stResetPassword('${escapeAttr(u.username)}','${escapeAttr(u.displayName)}')">Reset password</button>
@@ -2819,6 +2817,134 @@ function stSystemHtml() {
       <p class="wa-sub">Restart server: <code>bash scripts/restart.sh</code> (menjalankan tes dulu). Log: <code>journalctl --user-unit=chat-center -n 50</code>.</p></div>`;
 }
 
+/* ── Reports (EPIC-015): the archive of what agents wrote ─────────────
+   A list on the left (filter by kind, unread in bold), the report on the
+   right rendered from Markdown. Weekly team reports come by themselves on
+   Monday morning; "Buat laporan mingguan" writes one now. */
+const rp = { kind: '', list: [], kinds: {}, cur: null, poll: null, groups: null };
+const RP_ICON = { wa_summary: '💬', wa_digest: '🤖', discussion: '🗣️', weekly: '📊' };
+
+async function rpOpen() {
+  await meReady;
+  rp.cur = null; rpStopPoll();
+  document.getElementById('reportsPage').innerHTML = `<div class="rp-list" id="rpList"><div class="wa-msg"><span class="wa-spin"></span>Memuat laporan…</div></div>
+    <div class="rp-read" id="rpRead"></div>`;
+  await rpLoad();
+  if (waPage !== 'reports') return;
+  rpRenderRead();
+  let last = null;
+  try { last = Number(localStorage.getItem('rp.cur')); } catch (e) { /* private mode */ }
+  if (last && rp.list.some((r) => r.id === last)) rpShow(last);
+}
+function rpClose() { rp.cur = null; rpStopPoll(); }
+function rpStopPoll() { clearTimeout(rp.poll); rp.poll = null; }
+
+async function rpLoad() {
+  try {
+    const r = await api('GET', '/api/reports' + (rp.kind ? '?kind=' + rp.kind : ''));
+    rp.list = r.reports; rp.kinds = r.kinds;
+    rpBadgeSet(r.unread);
+  } catch (e) { const el = document.getElementById('rpList'); if (el) el.innerHTML = `<div class="wa-msg err">${escapeHtml(e.message)}</div>`; return; }
+  if (waPage === 'reports') rpRenderList();
+}
+function rpFilter(kind) { rp.kind = kind; rpLoad(); }
+
+function rpRenderList() {
+  const el = document.getElementById('rpList');
+  if (!el) return;
+  const chips = [['', 'Semua'], ...Object.entries(rp.kinds)].map(([k, l]) => `<button type="button" class="${rp.kind === k ? 'on' : ''}" onclick="rpFilter('${k}')">${escapeHtml(l)}</button>`).join('');
+  const items = rp.list.map((r) => `<button type="button" class="rp-item${r.unread ? ' unread' : ''}${rp.cur && rp.cur.id === r.id ? ' on' : ''}${r.status !== 'done' ? ' ' + r.status : ''}" onclick="rpShow(${r.id})">
+      <span class="rp-ic">${RP_ICON[r.kind] || '📄'}</span>
+      <span class="rp-item-main"><span class="rp-item-title">${escapeHtml(r.title)}</span>
+        <span class="rp-item-sub">${r.status === 'running' ? '<span class="wa-spin"></span>sedang ditulis…' : r.status === 'error' ? '⚠️ gagal dibuat' : escapeHtml(r.subtitle || r.kindLabel)}</span>
+        ${r.preview && r.status === 'done' ? `<span class="rp-item-prev">${escapeHtml(r.preview)}</span>` : ''}</span>
+      <span class="rp-item-time">${escapeHtml(fmtTime(r.createdAt))}</span></button>`).join('');
+  el.innerHTML = `<div class="rp-list-h"><h3>Reports</h3><button class="wa-btn primary btn-sm" type="button" onclick="rpWeekly()">+ Laporan mingguan</button></div>
+    <div class="was-chips rp-chips">${chips}</div>
+    <div class="rp-items">${items || `<div class="rp-empty"><b>Belum ada laporan${rp.kind ? ' jenis ini' : ''}</b><p>Ringkasan grup, ringkasan diskusi, hasil otomatis bot, dan laporan mingguan akan terkumpul di sini.</p></div>`}</div>`;
+}
+
+async function rpShow(id) {
+  rpStopPoll();
+  try { rp.cur = (await api('GET', '/api/reports/' + id)).report; } catch (e) { showToast(e.message); return; }
+  try { localStorage.setItem('rp.cur', id); } catch (e) { /* private mode */ }
+  const it = rp.list.find((r) => r.id === id);
+  if (it && it.unread && rp.cur.status === 'done') { it.unread = false; rpBadgeSet(Math.max(0, (rp.unread || 0) - 1)); }
+  rpRenderList(); rpRenderRead();
+  if (rp.cur.status === 'running') rp.poll = setTimeout(() => { if (rp.cur && rp.cur.id === id) { rpLoad(); rpShow(id); } }, 2500);
+}
+
+function rpRenderRead() {
+  const el = document.getElementById('rpRead');
+  if (!el) return;
+  const r = rp.cur;
+  if (!r) {
+    el.innerHTML = `<div class="rp-blank"><div class="rp-blank-ic">📄</div><b>Pilih laporan untuk dibaca</b>
+      <p>Laporan mingguan tim dibuat otomatis setiap Senin pagi oleh Aurix. Ringkasan grup WhatsApp, ringkasan diskusi, dan hasil otomatis bot ikut terkumpul di sini.</p></div>`;
+    return;
+  }
+  const body = r.status === 'running' ? '<div class="sc-agenda-wait"><span class="wa-spin"></span>Aurix sedang menulis laporan ini… biasanya kurang dari satu menit.</div>'
+    : r.status === 'error' ? `<div class="wa-msg err">Laporan gagal dibuat: ${escapeHtml(r.error || '')}</div>${r.kind === 'weekly' ? '<div class="sc-actions"><button class="wa-btn primary" type="button" onclick="rpWeekly(rp.cur.periodFrom)">Coba lagi</button></div>' : ''}`
+      : `<article class="rp-body was-result">${formatMsg(r.body)}</article>`;
+  const canDelete = ME && (ME.role === 'admin' || (r.createdBy && r.createdBy === ME.displayName));
+  const sent = r.sentTo.length ? `<div class="rp-sent">Dikirim ke ${r.sentTo.map((g) => escapeHtml(g.name || g.id)).join(', ')}</div>` : '';
+  el.innerHTML = `<div class="rp-read-h">
+      <div class="rp-read-t"><span class="rp-kind">${RP_ICON[r.kind] || '📄'} ${escapeHtml(r.kindLabel)}</span><h2>${escapeHtml(r.title)}</h2>
+        <div class="wa-sub">${escapeHtml([r.subtitle, r.createdBy ? 'oleh ' + r.createdBy : r.agent ? 'oleh ' + (r.agent === 'bot' ? 'bot WhatsApp' : r.agent.charAt(0).toUpperCase() + r.agent.slice(1)) : null, schWibStamp(r.createdAt)].filter(Boolean).join(' · '))}</div></div>
+      ${r.status === 'done' ? `<div class="rp-read-acts">
+        <button class="wa-btn ghost btn-sm" type="button" onclick="navigator.clipboard.writeText(rp.cur.body).then(()=>showToast('Disalin'))">Salin</button>
+        <button class="wa-btn ghost btn-sm" type="button" onclick="rpSendDialog()">Kirim ke grup</button>
+        ${canDelete ? '<button class="wa-btn ghost btn-sm danger-text" type="button" onclick="rpDelete()">Hapus</button>' : ''}</div>` : ''}
+    </div>${sent}${body}`;
+  el.scrollTop = 0;
+}
+
+async function rpWeekly(periodFrom) {
+  const week = 'last';
+  const ok = await confirmDialog('Buat laporan mingguan sekarang?', 'Aurix menulis laporan untuk minggu lalu (Senin–Minggu) dari tugas, acara, dan diskusi. Kalau sudah ada, laporannya ditulis ulang.', 'Buat');
+  if (!ok) return;
+  try {
+    const r = await api('POST', '/api/reports/weekly', { week });
+    rp.kind = ''; await rpLoad(); rpShow(r.report.id);
+    showToast('Aurix sedang menulis laporan mingguan');
+  } catch (e) { showToast(e.message); }
+}
+
+async function rpSendDialog() {
+  if (!rp.groups) { try { rp.groups = (await api('GET', '/api/wa/groups')).groups; } catch (e) { showToast('Gagal memuat grup: ' + e.message); return; } }
+  const box = document.getElementById('confirmBox');
+  box.innerHTML = `<form class="cfm-card" onsubmit="event.preventDefault();rpSend(this)"><h3>Kirim ke grup WhatsApp</h3>
+      <p>Bot mengirim laporan ini (format WhatsApp) ke grup yang dipilih.</p>
+      <label class="ds-field">Grup<select name="chatId" required>${rp.groups.map((g) => `<option value="${escapeAttr(g.id)}">${escapeHtml(waGroupName(g))}</option>`).join('')}</select></label>
+      ${rp.groups.length ? '' : '<div class="wa-msg">Belum ada grup yang dikenal bot.</div>'}
+      <div class="cfm-actions"><button type="button" class="cfm-no" onclick="document.getElementById('confirmBox').classList.add('hidden')">Batal</button><button type="submit" class="cfm-yes ok"${rp.groups.length ? '' : ' disabled'}>Kirim</button></div></form>`;
+  box.classList.remove('hidden');
+  box.onclick = (e) => { if (e.target === box) box.classList.add('hidden'); };
+}
+async function rpSend(form) {
+  const b = form.querySelector('.cfm-yes'); b.disabled = true;
+  try { rp.cur = (await api('POST', `/api/reports/${rp.cur.id}/send`, { chatId: form.chatId.value })).report; document.getElementById('confirmBox').classList.add('hidden'); showToast('Laporan dikirim ke grup'); rpRenderRead(); }
+  catch (e) { showToast(e.message); b.disabled = false; }
+}
+async function rpDelete() {
+  if (!(await confirmDialog('Hapus laporan ini?', 'Laporan dihapus dari arsip untuk semua orang.', 'Hapus'))) return;
+  try { await api('DELETE', '/api/reports/' + rp.cur.id); } catch (e) { showToast(e.message); return; }
+  rp.cur = null; try { localStorage.removeItem('rp.cur'); } catch (e) { /* private mode */ }
+  await rpLoad(); rpRenderRead(); showToast('Laporan dihapus');
+}
+
+// Sidebar badge: reports not yet read.
+function rpBadgeSet(n) {
+  rp.unread = n;
+  const b = document.getElementById('rpBadge');
+  if (!b) return;
+  b.textContent = n > 99 ? '99+' : n;
+  b.classList.toggle('hidden', !n);
+}
+async function rpBadge() { try { rpBadgeSet((await api('GET', '/api/reports/unread')).unread); } catch (e) { /* keep */ } }
+meReady.then(rpBadge);
+setInterval(rpBadge, 5 * 60 * 1000);
+
 /* ── Page registry: one container per WhatsApp page ── */
 const WA_IMPL = {
   connect: { el: 'waConnect', open: waConnectOpen, close: waConnectClose },
@@ -2828,7 +2954,8 @@ const WA_IMPL = {
   tasks: { el: 'tasksPage', open: tfOpen, close: tfClose },
   discuss: { el: 'discussPage', open: dsOpen, close: dsClose },
   profile: { el: 'profilePage', open: pfOpen, close: pfClose },
-  settings: { el: 'settingsPage', open: stOpen, close: stClose }
+  settings: { el: 'settingsPage', open: stOpen, close: stClose },
+  reports: { el: 'reportsPage', open: rpOpen, close: rpClose }
 };
 function closeWaPages() { for (const p of Object.values(WA_IMPL)) p.close(); }
 

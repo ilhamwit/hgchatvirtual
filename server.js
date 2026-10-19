@@ -26,6 +26,7 @@ const { createHub } = require('./lib/hub');
 const { createNotifier } = require('./lib/notify');
 const { createIntegrations } = require('./lib/integrations');
 const { createSettings } = require('./lib/settings');
+const { createReports } = require('./lib/reports');
 
 // Fail fast on bad config. Production (systemd) must provide the Hermes
 // API key; CHAT_DEV=1 is the explicit opt-out for local UI work. See .env.example.
@@ -144,6 +145,13 @@ const settings = createSettings({
   onEvent: (event, username, detail) => audit.record(db, { event, username, ip: 'web', detail })
 });
 
+// Reports (EPIC-015): the archive of agent reports + the weekly team report.
+const reports = createReports({
+  db, gateway,
+  onEvent: (event, username, detail) => audit.record(db, { event, username, ip: 'web', detail })
+});
+reports.start();
+
 const api = createApi({
   db,
   gateway,
@@ -158,7 +166,8 @@ const api = createApi({
   hub,
   notifier,
   integrations,
-  settings
+  settings,
+  reports
 });
 
 // Keep only a basename, and only characters that are safe in a shell argument
