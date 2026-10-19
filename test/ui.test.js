@@ -206,3 +206,10 @@ test('no element id shadows a function name', () => {
   const clash = [...ids].filter((i) => fns.has(i) && !['rpBadge', 'tfBadge'].includes(i));
   assert.deepStrictEqual(clash, []);
 });
+
+test('WhatsApp groups: admins can take a group off the list (Pilih Group and Aurix)', () => {
+  assert.match(js, /\$\{waCanHide\(\) \? `<button class="wa-btn ghost wag-hide" type="button" onclick="waHideCurrent\(\)"/);
+  assert.match(js, /<input type="checkbox" id="waPurge"> Hapus juga riwayat pesannya dari Chat Center \(permanen\)/);
+  const office = fs.readFileSync(path.join(__dirname, '..', 'public', 'office.js'), 'utf8');
+  assert.match(office, /id="voWaHideBtn" onclick="voWaHide\(\)"/);
+});

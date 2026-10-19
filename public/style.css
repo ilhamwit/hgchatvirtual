@@ -1543,3 +1543,10 @@ img.ds-avi{object-fit:cover;background:#F4F4F8;border:1.5px solid rgba(201,168,7
 .vo-msgs.vo-wa .wag-msg{max-width:86%;}
 .vo-msgs.vo-wa .wag-more{align-self:center;}
 .vo-wa-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));border-top:1px solid #EAEAEF;background:#fff;font-size:11.5px;color:#9898B2;}
+
+/* Remove a WhatsApp group from the lists (admins) */
+.wag-hide{padding:5px 9px;display:flex;align-items:center;color:#B91C1C;}
+.wag-hide:hover{background:#FEF2F2;border-color:#FECACA;}
+#voWaHideBtn{color:#B91C1C;}
+.cfm-check{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:#3A3A52;margin:12px 0 14px;line-height:1.45;cursor:pointer;}
+.cfm-check input{margin-top:2px;accent-color:#B91C1C;}

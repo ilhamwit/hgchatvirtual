@@ -66,6 +66,16 @@ Konteks teknis untuk nanti: Hermes sudah menjalankan WhatsApp bridge
 - 2026-10-18 Status → ready-for-qa: semua menu live; QA tersisa = uji ganti nomor WhatsApp sungguhan lewat Koneksikan WA + `wa-apply.sh` — ready-for-qa
 - 2026-10-18 Permintaan user "UI dirapikan" (Summary Chat): tombol keluar dari kartu (5 kolom dipaksa satu baris) → formulir jadi Grup lebar penuh + info "N pesan · data sejak … · N anggota", lalu Dari/Sampai/Agent, lalu chip rentang cepat (Hari ini / 7 hari / 30 hari, chip aktif mengikuti tanggal) + tombol di kanan; catatan keterbatasan satu baris kecil; riwayat jadi kartu yang jelas bisa diklik dengan pill status berwarna, waktu dibuat, dan panah; kartu hasil punya Salin (Markdown) + Tutup; satu kolom di layar sempit. Hanya frontend. Screenshot dicek di 1440 px dan 1000 px — done
 - 2026-10-18 Permintaan user: ringkasan tidak perlu pilih agent — selalu oleh **Aurix**. Hermes: profil `aurix` diberi `API_SERVER_KEY` yang sama (backup `.env` di `~/.hermes/backups/pre-aurix-key-20261018-235112`); langsung berlaku tanpa restart Hermes (`/p/aurix/v1/models` 401 → 200), uji balasan Aurix: "Aurix". Chat Center: agent ringkasan jadi konfigurasi server `CHAT_WA_SUMMARY_AGENT` (default `aurix`), `agentId` dari browser diabaikan, validasi agent dihapus; UI: dropdown Agent dihapus, Dari/Sampai dua kolom, keterangan "Diringkas oleh Aurix" di samping tombol; nama agent di riwayat ditampilkan "Aurix". Ringkasan lama tetap tercatat dengan agent aslinya (Dave). Test diperbarui (agent dari browser diabaikan → /p/aurix), 76 PASS — done
+- 2026-10-19 Pemilik mengeluarkan bot dari grup "WIT. Surabaya - Strategic", tapi grupnya
+  tetap di daftar. Bridge tidak bisa dipakai untuk mendeteksi bot keluar: `GET /chat/<id>`
+  menelan error `groupMetadata` dan saat itu gagal juga untuk "HG Bot Testing" yang botnya
+  masih ada. Jadi dibuat manual: admin bisa "Hapus dari daftar" (Pilih Group dan panel
+  Aurix di Virtual Office), opsional "Hapus juga riwayat pesannya" (permanen). Skema v12:
+  `wa_groups.hidden_at/hidden_by/purged_before`. Grup tersembunyi kembali sendiri bila ada
+  pesan yang lebih baru (bot dimasukkan lagi); pesan yang dihapus tidak diimpor ulang walau
+  file arsip dibaca ulang (rotasi). Audit `wa_group_hidden` / `wa_group_purged`. Data di
+  Chat Center saja; file arsip Hermes tidak diubah. Tes: hide/unhide/purge + rotasi, API
+  403 untuk member. Tes 154/154, gates PASS.
 
 ## Dependencies
 

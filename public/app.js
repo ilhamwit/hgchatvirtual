@@ -1097,6 +1097,44 @@ function waGroupsOpen() {
 
 function waGroupsClose() { clearInterval(waG.timer); waG.timer = null; }
 
+/* A group the bot was taken out of: off the lists, optionally with its history (admins). */
+const WA_HIDE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+const waCanHide = () => !!(ME && ME.role === 'admin');
+function waHideDialog(name) {
+  const box = document.getElementById('confirmBox');
+  box.innerHTML = `<div class="cfm-card"><h3>Hapus grup dari daftar?</h3>
+      <p>"${escapeHtml(name)}" tidak akan tampil lagi di Pilih Group, Aurix, Summary, Jadwal, dan Reports. Kalau bot dimasukkan lagi ke grup ini dan ada pesan baru, grup muncul kembali.</p>
+      <label class="cfm-check"><input type="checkbox" id="waPurge"> Hapus juga riwayat pesannya dari Chat Center (permanen)</label>
+      <div class="cfm-actions"><button type="button" class="cfm-no">Batal</button><button type="button" class="cfm-yes">Hapus dari daftar</button></div></div>`;
+  box.classList.remove('hidden');
+  return new Promise((resolve) => {
+    const end = (v) => { box.classList.add('hidden'); document.removeEventListener('keydown', key); resolve(v); };
+    const key = (e) => { if (e.key === 'Escape') end(null); };
+    box.querySelector('.cfm-no').onclick = () => end(null);
+    box.querySelector('.cfm-yes').onclick = () => end({ purge: document.getElementById('waPurge').checked });
+    box.onclick = (e) => { if (e.target === box) end(null); };
+    document.addEventListener('keydown', key);
+    box.querySelector('.cfm-no').focus();
+  });
+}
+async function waHideGroup(id, name) {
+  const choice = await waHideDialog(name);
+  if (!choice) return false;
+  try {
+    const r = await api('POST', '/api/wa/groups/' + encodeURIComponent(id) + '/hide', { purge: choice.purge });
+    showToast(choice.purge ? `Grup dihapus dari daftar · ${r.group.deleted} pesan dihapus` : 'Grup dihapus dari daftar');
+    return true;
+  } catch (e) { showToast('⚠️ ' + e.message); return false; }
+}
+async function waHideCurrent() {
+  const g = waG.groups.find((x) => x.id === waG.current);
+  if (!g || !(await waHideGroup(g.id, waGroupName(g)))) return;
+  waG.current = null; waG.messages = [];
+  mDetail('waGroupsPage', false);
+  document.getElementById('wagChat').innerHTML = '<div class="wag-empty"><div class="rp-blank"><div class="rp-blank-ic">💬</div><b>Pilih grup untuk dibaca</b><p>Percakapan grup WhatsApp yang diikuti bot tampil di sini, hanya-baca.</p></div></div>';
+  waGroupsRefresh(true);
+}
+
 async function waGroupsRefresh(showErrors) {
   try {
     waG.groups = (await api('GET', '/api/wa/groups')).groups;
@@ -1204,7 +1242,8 @@ function renderWaChat(group, scroll) {
       <div><div class="wag-chat-title">${escapeHtml(waGroupName(g))}</div><div class="wag-chat-sub">${g.participants ? g.participants + ' anggota · ' : ''}${waG.messages.length} pesan dimuat</div></div>
       <span class="wag-ro">Hanya baca</span>
       <span class="wag-upd" id="wagUpdated">${waG.updatedAt ? 'Diperbarui ' + waClock(waG.updatedAt) : ''}</span>
-      <button class="wa-btn ghost wag-refresh" type="button" id="wagRefresh" onclick="waRefreshNow()" title="Ambil pesan baru">↻ Refresh</button></div>
+      <button class="wa-btn ghost wag-refresh" type="button" id="wagRefresh" onclick="waRefreshNow()" title="Ambil pesan baru">↻ Refresh</button>
+      ${waCanHide() ? `<button class="wa-btn ghost wag-hide" type="button" onclick="waHideCurrent()" title="Bot sudah keluar dari grup ini? Hapus dari daftar" aria-label="Hapus grup dari daftar">${WA_HIDE_ICON}</button>` : ''}</div>
     <div class="wag-msgs" id="wagMsgs">${waG.hasMore ? '<button class="wa-btn ghost wag-more" type="button" onclick="waLoadOlder()">Muat pesan lebih lama</button>' : ''}${rows}</div>`;
   const nb = document.getElementById('wagMsgs');
   if (scroll === 'bottom') nb.scrollTop = nb.scrollHeight;

@@ -559,6 +559,7 @@ function voAurixOpen(groupId) {
   box.innerHTML = `<div class="vo-chat-h">
       <button type="button" class="vo-ib${groupId ? '' : ' hidden'}" id="voWaBack" onclick="voAurixOpen(null)" title="Daftar grup" aria-label="Kembali ke daftar grup"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
       <img src="${VO_AURIX.img}" alt=""><div class="vo-chat-t"><b id="voWaTitle">Aurix</b><span id="voWaSub">Bot WhatsApp · pilih grup untuk dibaca</span></div>
+      <button type="button" class="vo-ib${groupId && waCanHide() ? '' : ' hidden'}" id="voWaHideBtn" onclick="voWaHide()" title="Bot sudah keluar dari grup ini? Hapus dari daftar" aria-label="Hapus grup dari daftar">${WA_HIDE_ICON}</button>
       <button type="button" class="vo-ib" onclick="voWaRefresh(true)" title="Muat ulang" aria-label="Muat ulang"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></button>
       <button type="button" class="vo-ib" onclick="voChatClose();openWaPage('groups')" title="Buka halaman Pilih Group" aria-label="Buka halaman Pilih Group"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
       <button type="button" class="vo-ib" onclick="voChatClose()" title="Tutup (Esc)" aria-label="Tutup"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
@@ -650,4 +651,11 @@ async function voWaOlder() {
   if (!VO.chat || VO.chat.seq !== seq) return;
   c.msgs = data.messages.concat(c.msgs); c.hasMore = data.hasMore;
   voWaChat(data.group, false);
+}
+
+async function voWaHide() {
+  const c = VO.chat;
+  if (!c || c.agentId !== 'aurix' || !c.group) return;
+  const name = document.getElementById('voWaTitle').textContent;
+  if (await waHideGroup(c.group, name)) voAurixOpen(null);
 }

@@ -253,3 +253,58 @@ test('"@<lid>" mentions show names: the bot, mapped members, unknown left as is'
   assert.strictEqual(page[1].body, '@Rederp tolong cek, cc @Cahyo Febrianto dan @99999999999');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+// A group the bot left: off the lists until a newer message arrives; purge
+// deletes its history and a re-read archive file does not bring it back.
+test('hide a group the bot left; it returns on a new message; purge survives a re-read', async () => {
+  const dir = tempDir();
+  const file = path.join(dir, 'archive.jsonl');
+  const a = line({ chatId: G1, ts: at(2026, 10, 18, 9), sender: 'Ana', body: 'pagi' });
+  const b = line({ chatId: G2, ts: at(2026, 10, 18, 10), sender: 'Budi', body: 'keluarkan botnya dulu' });
+  fs.writeFileSync(file, a + b);
+  const db = openDb(':memory:');
+  db.prepare("INSERT INTO users (id, username, display_name, password_hash, role, created_at) VALUES (7, 'ilham', 'Ilham', 'x', 'admin', 0)").run();
+  const wa = createWaArchive({ hermesStateDb: '/nonexistent', sessionDir: '/nonexistent', db, gateway: null, archivePath: file, bridgeUrl: 'http://127.0.0.1:9' });
+  const ids = async () => (await wa.groups()).map((g) => g.id).sort();
+  assert.deepStrictEqual(await ids(), [G1, G2].sort());
+
+  assert.deepStrictEqual(wa.hideGroup({ id: 7 }, G2), { id: G2, name: null, hidden: true, deleted: 0 });
+  assert.deepStrictEqual(await ids(), [G1], 'hidden from the list');
+  assert.ok(wa.messages(G2), 'history is still there');
+  assert.strictEqual(wa.hideGroup({ id: 7 }, '120363999@g.us'), null, 'unknown group');
+  assert.throws(() => wa.hideGroup({ id: 7 }, 'bad'), /bukan id grup/);
+
+  // The bot is added back: a newer message brings the group back.
+  fs.appendFileSync(file, line({ chatId: G2, ts: at(2026, 10, 18, 11), sender: 'Budi', body: 'bot sudah masuk lagi' }));
+  assert.deepStrictEqual(await ids(), [G1, G2].sort(), 'back after a new message');
+
+  // Purge: gone from the list and the archive, and a rotated file (read from the start) does not restore it.
+  assert.strictEqual(wa.hideGroup({ id: 7 }, G2, { purge: true }).deleted, 2);
+  assert.deepStrictEqual(await ids(), [G1]);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM wa_messages WHERE chat_id = ?').get(G2).n, 0);
+  fs.unlinkSync(file);
+  fs.writeFileSync(file, a + b + line({ chatId: G2, ts: at(2026, 10, 18, 11), sender: 'Budi', body: 'bot sudah masuk lagi' }));
+  wa.sync();
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM wa_messages WHERE chat_id = ?').get(G2).n, 0, 'purged messages stay deleted');
+  assert.deepStrictEqual(await ids(), [G1]);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('API: only admins can take a group off the list; members get 403', async () => {
+  const home = tempDir();
+  const archive = path.join(home, 'archive.jsonl');
+  fs.writeFileSync(archive, line({ chatId: G1, ts: at(2026, 10, 18, 9), sender: 'Ana', body: 'pagi' }) + line({ chatId: G2, ts: at(2026, 10, 18, 9), sender: 'Budi', body: 'halo' }));
+  const srv = await startServer([{ username: 'ilham', password: 'ilham-password-1', role: 'admin' }, { username: 'cahyo', password: 'cahyo-password-1' }], { CHAT_WA_ARCHIVE: archive });
+  try {
+    const member = (await srv.login('cahyo', 'cahyo-password-1')).cookie;
+    const admin = (await srv.login('ilham', 'ilham-password-1')).cookie;
+    const url = `/api/wa/groups/${encodeURIComponent(G2)}/hide`;
+    assert.strictEqual((await srv.json(member, 'POST', url, {})).status, 403);
+    const r = await srv.json(admin, 'POST', url, { purge: true });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.body.group.deleted, 1);
+    const groups = (await srv.json(member, 'GET', '/api/wa/groups')).body.groups;
+    assert.deepStrictEqual(groups.map((g) => g.id), [G1], 'gone for everyone');
+    assert.strictEqual((await srv.json(admin, 'POST', `/api/wa/groups/${encodeURIComponent('120363999@g.us')}/hide`, {})).status, 404);
+  } finally { await srv.stop(); fs.rmSync(home, { recursive: true, force: true }); }
+});
