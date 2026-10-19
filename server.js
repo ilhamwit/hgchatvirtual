@@ -25,6 +25,7 @@ const { createTasks } = require('./lib/tasks');
 const { createHub } = require('./lib/hub');
 const { createNotifier } = require('./lib/notify');
 const { createIntegrations } = require('./lib/integrations');
+const { createSettings } = require('./lib/settings');
 
 // Fail fast on bad config. Production (systemd) must provide the Hermes
 // API key; CHAT_DEV=1 is the explicit opt-out for local UI work. See .env.example.
@@ -137,6 +138,12 @@ const integrations = createIntegrations({
   onEvent: (event, username, detail) => audit.record(db, { event, username, ip: 'api', detail })
 });
 
+// Settings (EPIC-014): team accounts, system status, own password.
+const settings = createSettings({
+  db, whatsapp, gatewayUrl: GATEWAY,
+  onEvent: (event, username, detail) => audit.record(db, { event, username, ip: 'web', detail })
+});
+
 const api = createApi({
   db,
   gateway,
@@ -150,7 +157,8 @@ const api = createApi({
   tasks: createTasks({ db }),
   hub,
   notifier,
-  integrations
+  integrations,
+  settings
 });
 
 // Keep only a basename, and only characters that are safe in a shell argument
@@ -403,6 +411,20 @@ const server = http.createServer((req, res) => {
   if (urlNoQuery === '/api/stream' && req.method === 'GET') {
     const token = getCookie(req, COOKIE_NAME);
     hub.attach(req, res, user, () => !!auth.getSessionUser(db, token));
+    return;
+  }
+
+  // Own password (EPIC-014): ends the other sessions and re-issues this one.
+  if (urlNoQuery === '/api/profile/password' && req.method === 'POST') {
+    readBody(req, 4096, async (raw) => {
+      let body = {};
+      try { body = JSON.parse(raw || '{}'); } catch (e) { return sendJson(res, 400, { error: 'invalid JSON' }); }
+      try {
+        const { token } = await settings.changeOwnPassword(user, body, req.headers['user-agent']);
+        setSessionCookie(req, res, token);
+        sendJson(res, 200, { ok: true });
+      } catch (e) { sendJson(res, e.status || 500, { error: e.status ? e.message : 'internal error' }); }
+    });
     return;
   }
 

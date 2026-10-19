@@ -901,7 +901,8 @@ const WA_PAGES = {
   schedule: { title: 'Jadwal & Meeting', crumb: 'Schedule', hash: 'schedule' },
   tasks: { title: 'Fokus saya', crumb: 'Task Focus', hash: 'tasks' },
   discuss: { title: 'Diskusi tim', crumb: 'Chat & Discussion', hash: 'discuss' },
-  profile: { title: 'Profil & notifikasi', crumb: 'Akun', hash: 'profile' }
+  profile: { title: 'Profil & notifikasi', crumb: 'Akun', hash: 'profile' },
+  settings: { title: 'Pengaturan tim', crumb: 'Settings', hash: 'settings' }
 };
 const pageHash = (key) => '#' + (WA_PAGES[key].hash || 'wa-' + key);
 let waPage = null;
@@ -2609,15 +2610,33 @@ function pfRender() {
         <button class="wa-btn ghost" type="button" onclick="logout()">Keluar</button></div>
       <div class="wa-box"><h3>🔔 Notifikasi browser</h3>${browser}</div>
       <div class="wa-box"><h3>💬 Notifikasi WhatsApp</h3>${wa}</div>
-      ${ME && ME.role === 'admin' ? `<div class="wa-box" id="pfKeys"><h3>🔌 Integrasi API <span class="pf-admin">Admin</span></h3>${pfKeysHtml()}</div>` : ''}
+      <div class="wa-box"><h3>🔑 Ganti password</h3>
+        <form class="pf-pw" onsubmit="event.preventDefault();pfChangePassword(this)" autocomplete="off">
+          <label class="pf-field">Password sekarang<input type="password" name="current" autocomplete="current-password" required></label>
+          <label class="pf-field">Password baru <span>(minimal 10 karakter)</span><input type="password" name="next" autocomplete="new-password" minlength="10" required></label>
+          <label class="pf-field">Ulangi password baru<input type="password" name="again" autocomplete="new-password" minlength="10" required></label>
+          <div><button class="wa-btn primary" type="submit">Simpan password</button></div>
+        </form>
+        <div class="wa-sub">Perangkat lain akan keluar otomatis; browser ini tetap masuk.</div></div>
+      ${ME && ME.role === 'admin' ? '<div class="wa-box"><h3>⚙️ Pengaturan tim</h3><div class="wa-msg">Akun tim, API key integrasi, dan status sistem ada di menu <a href="#settings" onclick="event.preventDefault();openWaPage(\'settings\')">Settings</a>.</div></div>' : ''}
     </div>`;
+}
+
+async function pfChangePassword(form) {
+  if (form.next.value !== form.again.value) { showToast('Password baru tidak sama'); form.again.focus(); return; }
+  try {
+    const res = await fetch('/api/profile/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current: form.current.value, next: form.next.value }) });
+    const d = await res.json().catch(() => ({}));
+    if (res.status === 401) { location.href = '/login'; return; }
+    if (!res.ok) throw new Error(d.error || 'gagal');
+    form.reset(); showToast('✅ Password diganti');
+  } catch (e) { showToast(e.message); }
 }
 
 /* ── Integrasi API (EPIC-013): API keys for the WhatsApp agent etc. — admins ── */
 async function pfLoadKeys() {
   try { const r = await api('GET', '/api/integrations/keys'); pf.keys = r.keys; pf.scopes = r.scopes; } catch (e) { pf.keys = null; }
-  const box = document.getElementById('pfKeys');
-  if (box) box.innerHTML = `<h3>🔌 Integrasi API <span class="pf-admin">Admin</span></h3>${pfKeysHtml()}`;
+  if (waPage === 'settings') stRender();
 }
 function pfKeysHtml() {
   if (pf.keys === undefined) { setTimeout(pfLoadKeys, 0); return '<div class="wa-msg"><span class="wa-spin"></span>Memuat…</div>'; }
@@ -2686,6 +2705,120 @@ function pfTestBrowser() {
   catch (e) { showToast('Browser ini menolak notifikasi dari halaman'); }
 }
 
+/* ── Settings (EPIC-014): team accounts, API keys, system — admins ── */
+const st = { tab: 'users', users: null, status: null, fresh: null };
+const ST_TABS = [['users', '👥 Akun tim'], ['keys', '🔌 Integrasi API'], ['system', '🖥️ Sistem']];
+const fmtBytes = (n) => (n == null ? '—' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(1) + ' MB');
+const fmtUptime = (s) => (s < 3600 ? Math.floor(s / 60) + ' menit' : s < 86400 ? Math.floor(s / 3600) + ' jam ' + Math.floor((s % 3600) / 60) + ' menit' : Math.floor(s / 86400) + ' hari ' + Math.floor((s % 86400) / 3600) + ' jam');
+
+async function stOpen() {
+  await meReady;
+  const el = document.getElementById('settingsPage');
+  if (!ME || ME.role !== 'admin') {
+    el.innerHTML = '<div class="wa-grid"><div class="wa-box"><h3>⚙️ Settings</h3><div class="wa-msg">Halaman ini hanya untuk admin. Pengaturan pribadi (notifikasi, password) ada di <a href="#profile">Profil & notifikasi</a>.</div></div></div>';
+    return;
+  }
+  st.fresh = null;
+  stRender();
+  stLoad();
+}
+function stClose() { st.fresh = null; }
+function stTab(t) { st.tab = t; st.fresh = null; stRender(); stLoad(); }
+
+async function stLoad() {
+  try {
+    if (st.tab === 'users') st.users = (await api('GET', '/api/settings/users')).users;
+    else if (st.tab === 'keys') { const r = await api('GET', '/api/integrations/keys'); pf.keys = r.keys; pf.scopes = r.scopes; }
+    else st.status = await api('GET', '/api/settings/status');
+  } catch (e) { showToast(e.message); }
+  if (waPage === 'settings') stRender();
+}
+
+function stRender() {
+  const el = document.getElementById('settingsPage');
+  if (!el) return;
+  const tabs = `<div class="tf-tabs st-tabs">${ST_TABS.map(([k, l]) => `<button type="button" class="${st.tab === k ? 'on' : ''}" onclick="stTab('${k}')">${l}</button>`).join('')}</div>`;
+  const body = st.tab === 'users' ? stUsersHtml() : st.tab === 'keys' ? `<div class="wa-box"><h3>🔌 Integrasi API</h3>${pfKeysHtml()}</div>` : stSystemHtml();
+  el.innerHTML = `<div class="wa-grid st-grid">${tabs}${body}</div>`;
+}
+
+function stUsersHtml() {
+  if (!st.users) return '<div class="wa-box"><div class="wa-msg"><span class="wa-spin"></span>Memuat akun…</div></div>';
+  const fresh = st.fresh ? `<div class="pf-newkey"><b>${escapeHtml(st.fresh.title)}</b>
+      <div class="pf-inline"><code>${escapeHtml(st.fresh.password)}</code><button class="wa-btn primary" type="button" onclick="navigator.clipboard.writeText('${escapeAttr(st.fresh.password)}').then(()=>showToast('Password disalin'))">Salin</button>
+      <button class="wa-btn ghost" type="button" onclick="st.fresh=null;stRender()">Sudah disampaikan</button></div>
+      <div class="wa-sub">Sampaikan lewat jalur pribadi. Password ini tidak ditampilkan lagi; minta yang bersangkutan menggantinya di Profil & notifikasi.</div></div>` : '';
+  const rows = st.users.map((u) => {
+    const me = ME && u.username === ME.username;
+    const status = u.disabled ? '<span class="wa-pill bad">Nonaktif</span>' : u.activeSessions ? `<span class="wa-pill ok">Online · ${u.activeSessions} sesi</span>` : '<span class="wa-pill wait">Aktif</span>';
+    const acts = me ? '<span class="wa-sub">akun Anda</span>' : `
+      <button class="wa-btn ghost" type="button" onclick="stSetRole('${escapeAttr(u.username)}','${u.role === 'admin' ? 'member' : 'admin'}')">${u.role === 'admin' ? 'Jadikan member' : 'Jadikan admin'}</button>
+      <button class="wa-btn ghost" type="button" onclick="stResetPassword('${escapeAttr(u.username)}','${escapeAttr(u.displayName)}')">Reset password</button>
+      ${u.activeSessions ? `<button class="wa-btn ghost" type="button" onclick="stRevoke('${escapeAttr(u.username)}')">Logout semua</button>` : ''}
+      <button class="wa-btn ghost${u.disabled ? '' : ' danger-text'}" type="button" onclick="stSetDisabled('${escapeAttr(u.username)}',${u.disabled ? 'false' : 'true'},'${escapeAttr(u.displayName)}')">${u.disabled ? 'Aktifkan' : 'Nonaktifkan'}</button>`;
+    return `<tr class="${u.disabled ? 'revoked' : ''}"><td>${dsAvatar({ username: u.username, name: u.displayName }, 'sm')}</td>
+      <td><b>${escapeHtml(u.displayName)}</b><div class="wa-sub">@${escapeHtml(u.username)}</div></td>
+      <td>${u.role === 'admin' ? '<span class="pf-admin">Admin</span>' : 'Member'}</td>
+      <td>${status}<div class="wa-sub">${u.lastSeen ? 'terakhir ' + escapeHtml(schWibStamp(u.lastSeen)) : 'belum pernah login'}</div></td>
+      <td class="st-acts">${acts}</td></tr>`;
+  }).join('');
+  return `<div class="wa-box">${fresh}<h3>👥 Akun tim <span class="wa-sub">${st.users.filter((u) => !u.disabled).length} aktif</span></h3>
+      <table class="pf-keys st-users"><thead><tr><th></th><th>Nama</th><th>Peran</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <form class="pf-keyform" onsubmit="event.preventDefault();stAddUser(this)">
+        <input name="username" maxlength="32" placeholder="username (huruf kecil)" pattern="[a-z0-9._-]{2,32}" required>
+        <input name="displayName" maxlength="60" placeholder="Nama lengkap" required>
+        <label class="pf-check"><input type="checkbox" name="admin"> Admin</label>
+        <button class="wa-btn primary" type="submit">Tambah akun</button></form>
+      <p class="wa-sub">Password sementara dibuat otomatis dan ditampilkan sekali. Dari terminal tetap bisa: <code>node scripts/users.js</code>.</p></div>`;
+}
+
+async function stAddUser(form) {
+  try {
+    const r = await api('POST', '/api/settings/users', { username: form.username.value, displayName: form.displayName.value, role: form.admin.checked ? 'admin' : 'member' });
+    st.fresh = { title: `Akun ${r.user.displayName} (@${r.user.username}) dibuat — password sementara:`, password: r.tempPassword };
+    form.reset();
+  } catch (e) { showToast(e.message); return; }
+  stLoad();
+}
+async function stSetRole(username, role) {
+  try { await api('PATCH', '/api/settings/users/' + username, { role }); showToast(`@${username} sekarang ${role}`); } catch (e) { showToast(e.message); }
+  stLoad();
+}
+async function stSetDisabled(username, disabled, name) {
+  if (disabled && !(await confirmDialog(`Nonaktifkan ${name}?`, 'Akun ini tidak bisa login dan langsung keluar dari semua perangkat. Bisa diaktifkan lagi kapan saja.', 'Nonaktifkan'))) return;
+  try { await api('PATCH', '/api/settings/users/' + username, { disabled }); } catch (e) { showToast(e.message); }
+  stLoad();
+}
+async function stResetPassword(username, name) {
+  if (!(await confirmDialog(`Reset password ${name}?`, 'Password lama tidak berlaku lagi dan semua sesinya berakhir. Password sementara baru akan ditampilkan sekali.', 'Reset'))) return;
+  try { const r = await api('POST', `/api/settings/users/${username}/reset-password`); st.fresh = { title: `Password sementara baru untuk ${name} (@${username}):`, password: r.tempPassword }; }
+  catch (e) { showToast(e.message); }
+  stLoad();
+}
+async function stRevoke(username) {
+  try { const r = await api('POST', `/api/settings/users/${username}/revoke-sessions`); showToast(`${r.ended} sesi @${username} diakhiri`); } catch (e) { showToast(e.message); }
+  stLoad();
+}
+
+function stSystemHtml() {
+  const s = st.status;
+  if (!s) return '<div class="wa-box"><div class="wa-msg"><span class="wa-spin"></span>Memeriksa sistem…</div></div>';
+  const ID = { ok: 'tersambung', connected: 'tersambung', unreachable: 'tidak terjangkau', disconnected: 'terputus', error: 'galat' };
+  const pill = (v, okv) => `<span class="wa-pill ${v === okv ? 'ok' : 'bad'}">${escapeHtml(ID[v] || v || '—')}</span>`;
+  const row = (k, v) => `<div class="st-row"><span>${k}</span><div>${v}</div></div>`;
+  return `<div class="wa-box"><h3>🖥️ Sistem <button class="wa-btn ghost st-refresh" type="button" onclick="stLoad()">Periksa lagi</button></h3>
+      <div class="st-rows">
+        ${row('Server', `${pill('berjalan', 'berjalan')} <span class="wa-sub">sejak ${escapeHtml(fmtUptime(s.uptimeSec))} · PID ${s.pid} · Node ${escapeHtml(s.node)}</span>`)}
+        ${row('Versi aplikasi', `<code>${escapeHtml(s.version || '—')}</code> <span class="wa-sub">· skema database v${s.schema}</span>`)}
+        ${row('Database', `${fmtBytes(s.dbSize)} <span class="wa-sub">· ${s.counts.conversations} percakapan, ${s.counts.messages} pesan agent, ${s.counts.roomMessages} pesan diskusi, ${s.counts.tasks} tugas, ${s.counts.events} acara</span>`)}
+        ${row('Backup terakhir', s.backup ? `${pill('ada', 'ada')} <span class="wa-sub">${escapeHtml(schWibStamp(s.backup.at))} · ${fmtBytes(s.backup.size)} · ${s.backup.count} file</span>` : `${pill('belum ada', 'ada')} <span class="wa-sub">jalankan <code>bash scripts/install-backup-timer.sh</code></span>`)}
+        ${row('Hermes (agent)', pill(s.hermes, 'ok'))}
+        ${row('Bot WhatsApp', s.whatsapp ? `${pill(s.whatsapp.bridge, 'connected')} <span class="wa-sub">${s.whatsapp.phone ? '+' + escapeHtml(s.whatsapp.phone) + (s.whatsapp.name ? ' · ' + escapeHtml(s.whatsapp.name) : '') : ''}</span>` : '—')}
+        ${row('Akun & sesi', `${s.counts.users} akun aktif · ${s.counts.sessions} sesi login`)}
+      </div>
+      <p class="wa-sub">Restart server: <code>bash scripts/restart.sh</code> (menjalankan tes dulu). Log: <code>journalctl --user-unit=chat-center -n 50</code>.</p></div>`;
+}
+
 /* ── Page registry: one container per WhatsApp page ── */
 const WA_IMPL = {
   connect: { el: 'waConnect', open: waConnectOpen, close: waConnectClose },
@@ -2694,7 +2827,8 @@ const WA_IMPL = {
   schedule: { el: 'schedulePage', open: schOpen, close: schClose },
   tasks: { el: 'tasksPage', open: tfOpen, close: tfClose },
   discuss: { el: 'discussPage', open: dsOpen, close: dsClose },
-  profile: { el: 'profilePage', open: pfOpen, close: pfClose }
+  profile: { el: 'profilePage', open: pfOpen, close: pfClose },
+  settings: { el: 'settingsPage', open: stOpen, close: stClose }
 };
 function closeWaPages() { for (const p of Object.values(WA_IMPL)) p.close(); }
 

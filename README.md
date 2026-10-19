@@ -57,6 +57,12 @@ karakter). Kelola dari folder ini; perubahan langsung berlaku tanpa restart.
 Password selalu diminta lewat prompt tersembunyi, tidak pernah sebagai argumen.
 
 ```bash
+Dari web (EPIC-014): admin membuka **Settings → Akun tim** — tambah akun
+(password sementara dibuat otomatis, tampil sekali), ubah peran, nonaktifkan,
+reset password, logout paksa; tab **Integrasi API** dan **Sistem** di sana juga.
+Setiap orang mengganti password sendiri di **Profil & notifikasi**. Dari
+terminal, alat yang sama:
+
 node scripts/users.js add irfan --name "Irfan"        # anggota
 node scripts/users.js add ilham --name "Ilham" --admin
 node scripts/users.js list

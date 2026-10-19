@@ -115,8 +115,19 @@ test('notifications: browser on mention/DM, tab title, profile from the sidebar 
 
 // EPIC-013: admins manage API keys on the profile page.
 test('Integrasi API card is admin-only and shows a new key once', () => {
-  assert.match(js, /ME && ME\.role === 'admin' \? `<div class="wa-box" id="pfKeys">/);
+  assert.match(js, /st\.tab === 'keys' \? `<div class="wa-box"><h3>🔌 Integrasi API<\/h3>\$\{pfKeysHtml\(\)\}/, 'lives on the Settings page (EPIC-014)');
   assert.match(js, /api\('POST', '\/api\/integrations\/keys'/);
   assert.match(js, /tidak akan ditampilkan lagi/);
   assert.match(js, /Dibuat lewat WhatsApp/);
+});
+
+// EPIC-014: Settings is a real page for admins; own password on the profile.
+test('Settings opens #settings; team accounts, keys and system; own password on Profil', () => {
+  assert.match(html, /<div class="nav-item" data-wa="settings" onclick="openWaPage\('settings'\)">/);
+  assert.match(js, /\bsettings: \{ title: 'Pengaturan tim', crumb: 'Settings', hash: 'settings' \}/);
+  assert.match(js, /\bsettings: \{ el: 'settingsPage', open: stOpen, close: stClose \}/);
+  assert.match(html, /id="settingsPage"/);
+  for (const p of ['/api/settings/users', '/api/settings/status', '/api/profile/password']) assert.ok(js.includes(p), p);
+  assert.match(js, /if \(!ME \|\| ME\.role !== 'admin'\) \{/, 'members get a notice, not the page');
+  assert.strictEqual((html.match(/onclick="navClick\(this\)"/g) || []).length, 3, 'only Performance, Reports, Automation are still decorative');
 });

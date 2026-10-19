@@ -92,7 +92,7 @@
           <span class="ni"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span>
           Automation
         </div>
-        <div class="nav-item" onclick="navClick(this)">
+        <div class="nav-item" data-wa="settings" onclick="openWaPage('settings')">
           <span class="ni"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg></span>
           Settings
         </div>
@@ -189,6 +189,8 @@
       <!-- Pilih Group (T-043) and Summary Chat (T-045): drawn by app.js -->
       <div class="wa-page wa-full hidden" id="waGroupsPage"></div>
       <div class="wa-page hidden" id="waSummaryPage"></div>
+      <!-- Settings (EPIC-014): team accounts, API keys, system — admins -->
+      <div class="wa-page hidden" id="settingsPage"></div>
       <!-- Profil & notifikasi (EPIC-012 stage 3), drawn by app.js -->
       <div class="wa-page hidden" id="profilePage"></div>
       <!-- Chat & Discussion (EPIC-012): channels + DMs, drawn by app.js -->
