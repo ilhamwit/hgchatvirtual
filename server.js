@@ -24,6 +24,7 @@ const { createEvents } = require('./lib/events');
 const { createTasks } = require('./lib/tasks');
 const { createHub } = require('./lib/hub');
 const { createNotifier } = require('./lib/notify');
+const { createIntegrations } = require('./lib/integrations');
 
 // Fail fast on bad config. Production (systemd) must provide the Hermes
 // API key; CHAT_DEV=1 is the explicit opt-out for local UI work. See .env.example.
@@ -128,6 +129,14 @@ const events = createEvents({
 });
 events.start();
 
+// Group reading + summaries from Hermes' WhatsApp group archive (read only).
+const waArchive = createWaArchive({ db, gateway });
+// API keys + the v1 API the WhatsApp agent uses to create events (EPIC-013).
+const integrations = createIntegrations({
+  db, events, waArchive,
+  onEvent: (event, username, detail) => audit.record(db, { event, username, ip: 'api', detail })
+});
+
 const api = createApi({
   db,
   gateway,
@@ -135,12 +144,13 @@ const api = createApi({
   mediaDir: MEDIA_DIR,
   whatsapp,
   // Group reading + summaries from Hermes' WhatsApp group archive (read only).
-  waArchive: createWaArchive({ db, gateway }),
+  waArchive,
   events,
   // Task Focus (EPIC-010): team tasks and their activity.
   tasks: createTasks({ db }),
   hub,
-  notifier
+  notifier,
+  integrations
 });
 
 // Keep only a basename, and only characters that are safe in a shell argument
@@ -372,6 +382,9 @@ const server = http.createServer((req, res) => {
   }
   if (urlNoQuery === '/login' && req.method === 'POST') { handleLogin(req, res); return; }
   if (urlNoQuery === '/logout' && req.method === 'POST') { handleLogout(req, res, user); return; }
+
+  // Integrations (EPIC-013): /api/v1/ uses an API key, not a login session.
+  if (urlNoQuery.startsWith('/api/v1/')) { api.handleV1(req, res, new URL(req.url, 'http://local')); return; }
 
   if (!user && !PUBLIC_PATHS.has(urlNoQuery)) {
     // API-ish routes get a JSON 401 so fetch() can report it; page loads get

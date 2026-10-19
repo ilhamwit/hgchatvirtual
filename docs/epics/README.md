@@ -26,6 +26,7 @@ riwayat tersimpan di server, dan agent yang benar-benar membantu kerja tim.
 | [EPIC-010](EPIC-010-task-focus.md)                     | Phase 2 | Task Focus: tugas tim, fokus saya, papan | P1       | on-progress |
 | [EPIC-011](EPIC-011-chat-sessions-files.md)            | Phase 2 | Sesi chat per agent & pratinjau file    | P1       | ready-for-qa |
 | [EPIC-012](EPIC-012-team-discussion.md)                | Phase 2 | Chat & Discussion: channel, DM, real-time | P1       | ready-for-qa |
+| [EPIC-013](EPIC-013-api-integration.md)                | Phase 2 | Integrasi API: agent WA membuat jadwal  | P1       | on-progress |
 
 **Definition of MVP:** selesainya EPIC-000 → EPIC-002.
 

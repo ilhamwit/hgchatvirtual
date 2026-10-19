@@ -112,3 +112,11 @@ test('notifications: browser on mention/DM, tab title, profile from the sidebar 
   assert.match(js, /onclick="logout\(\)">Keluar<\/button>/, 'logout moved into the profile page');
   assert.match(html, /id="profilePage"/);
 });
+
+// EPIC-013: admins manage API keys on the profile page.
+test('Integrasi API card is admin-only and shows a new key once', () => {
+  assert.match(js, /ME && ME\.role === 'admin' \? `<div class="wa-box" id="pfKeys">/);
+  assert.match(js, /api\('POST', '\/api\/integrations\/keys'/);
+  assert.match(js, /tidak akan ditampilkan lagi/);
+  assert.match(js, /Dibuat lewat WhatsApp/);
+});

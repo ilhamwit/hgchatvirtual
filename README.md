@@ -132,7 +132,27 @@ cp data/backups/<file>.db data/chat-center.db && chmod 600 data/chat-center.db
 systemctl --user start chat-center
 ```
 
-### WhatsApp Hermes (Koneksikan WA)
+### Integrasi API — agent WhatsApp membuat jadwal (EPIC-013)
+
+Agent WhatsApp (Hermes profil default, bot "Rederp") membuat acara di Schedule
+lewat `POST /api/v1/events` dengan API key (`Authorization: Bearer cc_…`).
+Peminta harus anggota tim dengan nomor WhatsApp terverifikasi (Profil &
+notifikasi) dan, di grup, baru saja menulis di grup itu. Agent selalu bertanya:
+draf atau langsung dibuatkan (langsung = agenda dikirim otomatis ke grup).
+
+Pasang sekali (manusia):
+1. Web → Profil & notifikasi → **Integrasi API** (admin) → Buat API key
+   (izin: buat acara + lihat jadwal) → salin.
+2. ```bash
+   bash "/home/hg/Documents/Chat Center/scripts/install-hermes-skill.sh"
+   ```
+   Tempel key-nya. Skill dipasang di `~/.hermes/skills/productivity/chat-center/`,
+   key di `~/.config/chat-center-agent.key` (600).
+3. Uji di grup: "@Rederp jadwalkan rapat tes besok jam 10".
+
+Cabut key kapan saja dari halaman yang sama; berlaku seketika.
+
+
 
 Halaman **WhatsApp → Koneksikan WA** menampilkan nomor WhatsApp yang
 dipakai Hermes (profil `default`, bridge di 127.0.0.1:3010) dan bisa memasangkan

@@ -1656,6 +1656,7 @@ function schEventHtml({ event: e, messages }) {
   return `<div class="sc-ph"><button class="sc-back" type="button" onclick="schShowUpcoming()">‹ Semua acara</button></div>
     <div class="sc-ev-head"><h2>${escapeHtml(e.title)}</h2><span class="wa-pill ${cls}">${label}</span></div>
     <div class="sc-facts">${facts}</div>
+    ${e.source === 'whatsapp' ? `<div class="sc-src">💬 Dibuat lewat WhatsApp${e.autoSend ? ' · dikirim otomatis begitu agenda siap' : ''}</div>` : ''}
     <div class="sc-by">Dibuat oleh ${escapeHtml(e.createdBy || '—')}${e.sentAt ? ` · dikirim oleh ${escapeHtml(e.sentBy || '—')}, ${escapeHtml(schWibStamp(e.sentAt))}` : ''}</div>
     ${manage}
     <div class="sc-sec"><div class="sc-sec-h">Agenda meeting <span>disusun Aurix</span></div>${agenda}</div>
@@ -2550,12 +2551,12 @@ async function dsGoTo(roomId, parentId) {
 }
 
 /* ── Profil & notifikasi (EPIC-012 T-075/T-076) ── */
-const pf = { profile: null, changing: false };
+const pf = { profile: null, changing: false, keys: undefined, scopes: null, newKey: null };
 async function pfOpen() {
   await meReady;
   document.getElementById('profilePage').innerHTML = '<div class="wa-grid"><div class="wa-box"><div class="wa-msg"><span class="wa-spin"></span>Memuat profil…</div></div></div>';
   try { pf.profile = (await api('GET', '/api/profile')).profile; } catch (e) { pf.profile = null; showToast(e.message); }
-  pf.changing = false;
+  pf.changing = false; pf.keys = undefined; pf.newKey = null;
   if (waPage === 'profile') pfRender();
 }
 function pfClose() {}
@@ -2608,7 +2609,44 @@ function pfRender() {
         <button class="wa-btn ghost" type="button" onclick="logout()">Keluar</button></div>
       <div class="wa-box"><h3>🔔 Notifikasi browser</h3>${browser}</div>
       <div class="wa-box"><h3>💬 Notifikasi WhatsApp</h3>${wa}</div>
+      ${ME && ME.role === 'admin' ? `<div class="wa-box" id="pfKeys"><h3>🔌 Integrasi API <span class="pf-admin">Admin</span></h3>${pfKeysHtml()}</div>` : ''}
     </div>`;
+}
+
+/* ── Integrasi API (EPIC-013): API keys for the WhatsApp agent etc. — admins ── */
+async function pfLoadKeys() {
+  try { const r = await api('GET', '/api/integrations/keys'); pf.keys = r.keys; pf.scopes = r.scopes; } catch (e) { pf.keys = null; }
+  const box = document.getElementById('pfKeys');
+  if (box) box.innerHTML = `<h3>🔌 Integrasi API <span class="pf-admin">Admin</span></h3>${pfKeysHtml()}`;
+}
+function pfKeysHtml() {
+  if (pf.keys === undefined) { setTimeout(pfLoadKeys, 0); return '<div class="wa-msg"><span class="wa-spin"></span>Memuat…</div>'; }
+  if (pf.keys === null) return '<div class="wa-msg err">Gagal memuat API key.</div>';
+  const fresh = pf.newKey ? `<div class="pf-newkey"><b>Salin key ini sekarang — tidak akan ditampilkan lagi.</b>
+      <div class="pf-inline"><code>${escapeHtml(pf.newKey)}</code><button class="wa-btn primary" type="button" onclick="navigator.clipboard.writeText('${escapeAttr(pf.newKey)}').then(()=>showToast('Key disalin'))">Salin</button>
+      <button class="wa-btn ghost" type="button" onclick="pf.newKey=null;pfLoadKeys()">Sudah disimpan</button></div>
+      <div class="wa-sub">Pasang ke agent WhatsApp dengan: <code>bash scripts/install-hermes-skill.sh</code> lalu tempel key ini saat diminta.</div></div>` : '';
+  const rows = pf.keys.map((k) => `<tr class="${k.revokedAt ? 'revoked' : ''}"><td><b>${escapeHtml(k.name)}</b><div class="wa-sub"><code>${escapeHtml(k.prefix)}…</code></div></td>
+      <td>${k.scopes.map((sc) => `<span class="pf-scope">${escapeHtml((pf.scopes && pf.scopes[sc]) || sc)}</span>`).join(' ')}</td>
+      <td>${k.lastUsedAt ? escapeHtml(schWibStamp(k.lastUsedAt)) : '<span class="wa-sub">belum dipakai</span>'}</td>
+      <td>${k.revokedAt ? '<span class="wa-pill bad">Dicabut</span>' : `<button class="wa-btn ghost" type="button" onclick="pfRevokeKey(${k.id}, '${escapeAttr(k.name)}')">Cabut</button>`}</td></tr>`).join('');
+  return `${fresh}<p class="wa-sub">Untuk sistem lain yang memanggil Chat Center — misalnya agent WhatsApp (Rederp) yang membuat jadwal. Setiap pemakaian tercatat di audit log.</p>
+    ${pf.keys.length ? `<table class="pf-keys"><thead><tr><th>Nama</th><th>Izin</th><th>Terakhir dipakai</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : ''}
+    <form class="pf-keyform" onsubmit="event.preventDefault();pfCreateKey(this)">
+      <input name="name" maxlength="60" placeholder="Nama key, mis. Rederp (WhatsApp)" required>
+      ${Object.entries(pf.scopes || {}).map(([sc, label]) => `<label class="pf-check"><input type="checkbox" name="scope" value="${sc}" checked> ${escapeHtml(label)}</label>`).join('')}
+      <button class="wa-btn primary" type="submit">Buat API key</button></form>`;
+}
+async function pfCreateKey(form) {
+  const scopes = [...form.querySelectorAll('input[name=scope]:checked')].map((i) => i.value);
+  try { const r = await api('POST', '/api/integrations/keys', { name: form.name.value, scopes }); pf.newKey = r.key; }
+  catch (e) { showToast(e.message); return; }
+  pfLoadKeys();
+}
+async function pfRevokeKey(id, name) {
+  if (!(await confirmDialog(`Cabut key "${name}"?`, 'Sistem yang memakai key ini langsung tidak bisa mengakses Chat Center lagi.', 'Cabut'))) return;
+  try { await api('DELETE', '/api/integrations/keys/' + id); showToast('Key dicabut'); } catch (e) { showToast(e.message); }
+  pfLoadKeys();
 }
 
 async function pfRequest(form) {
