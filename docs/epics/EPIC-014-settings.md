@@ -47,6 +47,7 @@ lewat tangan admin. Pengguna disarankan menggantinya di Profil.
 
 - 2026-10-19 Epic dibuat atas persetujuan pemilik (urutan: Settings → Reports → Automation → Performance) — on-progress
 - 2026-10-19 T-083…T-087 selesai. `lib/settings.js` (akun tim: tambah dengan password sementara 14 karakter dibuat server & tampil sekali, ubah peran, nonaktifkan/aktifkan, reset password, akhiri sesi; pagar: bukan untuk diri sendiri, admin terakhir tidak bisa diturunkan/dinonaktifkan; status sistem: commit, skema, ukuran DB, uptime, backup terakhir, Hermes, bridge WA, hitungan; ganti password sendiri → sesi lain berakhir, cookie sesi ini diterbitkan ulang). API `/api/settings/*` (admin), `POST /api/profile/password` (server.js, karena memasang cookie). Audit via `scripts/users.js audit` menampilkan tindakan web (`by <admin> (web)`) tanpa password. UI: halaman Settings (tab Akun tim / Integrasi API / Sistem; member melihat pesan hanya admin), kartu Integrasi API dipindah dari Profil, kartu Ganti password di Profil. Tes 131/131 (4 baru + UI), gates PASS, screenshot sandbox. Sisa: QA pemilik.
+- 2026-10-19 Restart oleh agent: PID 910227 → 924955, gates PASS, `/healthz` ok — live, menunggu QA pemilik.
 
 ## Dependencies
 
