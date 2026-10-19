@@ -333,9 +333,9 @@ function voChatOpen(id) {
       <button type="button" class="vo-ib" onclick="voChatClose()" title="Tutup (Esc)" aria-label="Tutup chat"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
     </div>
     <div class="vo-msgs" id="voMsgs"></div>
-    <form class="vo-compose" onsubmit="event.preventDefault();voSend()">
+    <form class="vo-compose" onsubmit="event.preventDefault();window.voSend()">
       <textarea id="voTa" rows="1" placeholder="Tulis pesan ke ${escapeAttr(a.name)}…" onkeydown="voTaKey(event)" oninput="voGrow(this)"></textarea>
-      <button type="submit" class="vo-send" id="voSend" title="Kirim" aria-label="Kirim"></button>
+      <button type="submit" class="vo-send" id="voSendBtn" title="Kirim" aria-label="Kirim"></button>
     </form>`;
   voStatus();
   voApply();
@@ -408,25 +408,25 @@ function voChatRender(messages, waiting) {
   box.scrollTop = box.scrollHeight;
   voChatButtons();
 }
-const voTypingHtml = () => `<div class="vo-m" id="voTyping"><img src="${voAgent(VO.chat.agentId).img}" alt=""><div class="vo-mb vo-dots"><i></i><i></i><i></i></div></div>`;
+const voTypingHtml = () => `<div class="vo-m" id="voTypingRow"><img src="${voAgent(VO.chat.agentId).img}" alt=""><div class="vo-mb vo-dots"><i></i><i></i><i></i></div></div>`;
 
 function voAppend(m) {
   const box = document.getElementById('voMsgs');
   if (!box) return;
   const empty = box.querySelector('.vo-empty'); if (empty) empty.remove();
-  const typing = document.getElementById('voTyping');
+  const typing = document.getElementById('voTypingRow');
   if (typing) typing.insertAdjacentHTML('beforebegin', voMsgHtml(m)); else box.insertAdjacentHTML('beforeend', voMsgHtml(m));
   box.scrollTop = box.scrollHeight;
 }
 function voTyping(on) {
   const box = document.getElementById('voMsgs');
-  const t = document.getElementById('voTyping');
+  const t = document.getElementById('voTypingRow');
   if (on && !t && box) { box.insertAdjacentHTML('beforeend', voTypingHtml()); box.scrollTop = box.scrollHeight; }
   if (!on && t) t.remove();
 }
 
 function voChatButtons() {
-  const btn = document.getElementById('voSend');
+  const btn = document.getElementById('voSendBtn');
   if (!btn) return;
   const busy = voConvPending();
   btn.classList.toggle('stop', busy);

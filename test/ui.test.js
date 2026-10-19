@@ -194,3 +194,15 @@ test('virtual office: menu under the agents, page slot, registry, script', () =>
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{\.vo \*\{animation:none !important;\}\}/);
   assert.match(css, /\.vo\.chatting \.vo-stage\{right:400px;\}/, 'the chat panel sits beside the room');
 });
+
+// An inline handler looks names up on its form first: an element whose id is
+// a function's name shadows that function (the office send button and task
+// comments were broken this way). No id may equal a function name.
+test('no element id shadows a function name', () => {
+  const office = fs.readFileSync(path.join(__dirname, '..', 'public', 'office.js'), 'utf8');
+  const fns = new Set([...(js + office).matchAll(/(?:^|\s)(?:async )?function ([A-Za-z0-9_]+)/g)].map((m) => m[1]));
+  const ids = new Set([...(html + js + office).matchAll(/id="([A-Za-z0-9_-]+)/g)].map((m) => m[1]));
+  // Badges are only touched from scripts, never from an inline handler inside a form.
+  const clash = [...ids].filter((i) => fns.has(i) && !['rpBadge', 'tfBadge'].includes(i));
+  assert.deepStrictEqual(clash, []);
+});

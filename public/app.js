@@ -1967,7 +1967,7 @@ function tfRenderPanel() {
     <div class="sc-sec"><div class="sc-sec-h">Komentar & riwayat</div>
       <div class="tf-feed">${feed}</div>
       <form class="tf-cform" onsubmit="event.preventDefault();tfComment(${t.id})">
-        <textarea id="tfComment" rows="2" maxlength="2000" placeholder="Tulis komentar…" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();tfComment(${t.id})}"></textarea>
+        <textarea id="tfCommentTa" rows="2" maxlength="2000" placeholder="Tulis komentar…" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();tfComment(${t.id})}"></textarea>
         <button class="wa-btn primary" type="submit">Kirim</button>
       </form></div>
     ${canDelete ? (tf.confirm ? `<div class="sc-confirm"><p>Hapus tugas ini beserta komentarnya?</p><div class="sc-actions">
@@ -1981,7 +1981,7 @@ function tfRenderPanel() {
 }
 
 async function tfComment(id) {
-  const box = document.getElementById('tfComment');
+  const box = document.getElementById('tfCommentTa');
   const text = box.value.trim();
   if (!text) return;
   try { tf.cur = await api('POST', `/api/tasks/${id}/comments`, { body: text }); }

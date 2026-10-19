@@ -72,6 +72,16 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   sama, status "sedang membalas" (titik mengetik, tombol stop, gelembung di meja),
   balasan tampil di panel dan sebagai gelembung 3D; ponsel = bottom sheet. Tes
   baru: klik tidak pindah halaman, isi pesan di-escape. Tes 149/149, gates PASS.
+- 2026-10-19 Bug dari pemilik: tombol kirim di panel chat tidak berfungsi di ponsel.
+  Direproduksi dengan ketukan sentuh CDP (emulasi Android): `TypeError: voSend is
+  not a function` di `onsubmit`. Penyebab: handler inline mencari nama di form lebih
+  dulu, dan tombol ber-id `voSend` membayangi fungsi `voSend()` (Enter tetap jalan
+  karena lewat `voTaKey`). Bug yang sama ada di komentar Task Focus (`#tfComment`
+  vs `tfComment()`): tombol Kirim dan Ctrl+Enter komentar tidak berfungsi. Perbaikan:
+  id `voSendBtn`, `voTypingRow`, `tfCommentTa`; `onsubmit` memanggil
+  `window.voSend()`. Tes penjaga baru: tidak boleh ada id yang sama dengan nama
+  fungsi. Diverifikasi ulang dengan ketukan sentuh: pesan terkirim, balasan tampil
+  di panel dan gelembung 3D. Tes 150/150, gates PASS.
 
 ## Dependencies
 
