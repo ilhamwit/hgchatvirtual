@@ -1,0 +1,1 @@
+livekit-client 2.15.7 — dist/livekit-client.umd.min.js from https://cdn.jsdelivr.net/npm/livekit-client@2.15.7/ (downloaded 2026-10-19, with the owner's permission). Loaded lazily by voiceStart() in public/app.js.
