@@ -2972,7 +2972,21 @@ function soonOpen(key) {
    browser joins the room with the microphone; the voice worker (deploy/voice)
    answers with the agent's Hermes profile. Captions come from LiveKit's
    transcription stream; the transcript lands in the conversation. */
-const vc = { room: null, agent: null, convId: null, state: 'idle', muted: false, caps: new Map(), lib: null, status: null };
+const vc = { room: null, agent: null, convId: null, state: 'idle', muted: false, caps: new Map(), lib: null, status: null, startedAt: 0, timer: null };
+// WhatsApp-call style icons (inline SVG, currentColor).
+const VC_ICON = {
+  mic: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V5.5a3.5 3.5 0 1 0-7 0V11a3.5 3.5 0 0 0 3.5 3.5Zm6-3.5a1 1 0 1 0-2 0 4 4 0 0 1-8 0 1 1 0 1 0-2 0 6 6 0 0 0 5 5.91V19H8.5a1 1 0 1 0 0 2h7a1 1 0 1 0 0-2H13v-2.09A6 6 0 0 0 18 11Z"/></svg>',
+  micOff: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.5 10.38V5.5a3.5 3.5 0 0 0-6.93-.7l6.93 6.93v-1.35ZM3.7 2.3a1 1 0 0 0-1.4 1.4l6.2 6.2V11a3.5 3.5 0 0 0 5.27 3.02l1.1 1.1A4 4 0 0 1 8 11a1 1 0 1 0-2 0 6 6 0 0 0 5 5.91V19H8.5a1 1 0 1 0 0 2h7a1 1 0 1 0 0-2H13v-2.09a5.9 5.9 0 0 0 2.33-.88l4.97 4.97a1 1 0 0 0 1.4-1.4L3.7 2.3ZM18 11a1 1 0 1 0-2 0c0 .4-.06.78-.17 1.14l1.56 1.56A5.95 5.95 0 0 0 18 11Z"/></svg>',
+  hangup: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 9c-2.6 0-5.06.55-7.3 1.55-.86.38-1.4 1.24-1.4 2.18v2.2c0 .87.82 1.5 1.66 1.27l3.03-.83c.66-.18 1.12-.78 1.12-1.47v-1.53A13.4 13.4 0 0 1 12 12c1 0 1.98.13 2.9.37v1.53c0 .69.46 1.29 1.12 1.47l3.03.83c.84.23 1.66-.4 1.66-1.27v-2.2c0-.94-.54-1.8-1.4-2.18A17.9 17.9 0 0 0 12 9Z"/></svg>',
+};
+function vcClock() {
+  if (!vc.startedAt) return '';
+  const t = Math.max(0, Math.floor((Date.now() - vc.startedAt) / 1000));
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = t % 60;
+  const mm = String(m).padStart(2, '0'), ss = String(sec).padStart(2, '0');
+  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+function vcTick() { const el = document.getElementById('vcTimer'); if (el) el.textContent = vcClock(); }
 const VC_STATE = { connecting: 'Menghubungkan…', listening: 'Mendengarkan…', thinking: 'Berpikir…', speaking: 'Berbicara…', initializing: 'Menyiapkan…', ended: 'Panggilan selesai' };
 
 async function vcLib() {
@@ -2989,7 +3003,7 @@ async function voiceStart() {
   if (vc.room) return;
   const agent = current;
   const view = document.getElementById('voiceView');
-  vc.agent = agent; vc.state = 'connecting'; vc.muted = false; vc.caps = new Map();
+  vc.agent = agent; vc.state = 'connecting'; vc.muted = false; vc.caps = new Map(); vc.startedAt = 0;
   view.classList.remove('hidden');
   vcRender();
   let s;
@@ -3023,7 +3037,15 @@ async function voiceStart() {
   }
 }
 
-function vcSetState(st) { if (!st || vc.state === 'ended') return; vc.state = st; vcRender(); }
+function vcSetState(st) {
+  if (!st || vc.state === 'ended') return;
+  // The call clock starts when the agent is really there (like WhatsApp after pickup).
+  if (!vc.startedAt && ['listening', 'thinking', 'speaking'].includes(st)) {
+    vc.startedAt = Date.now();
+    clearInterval(vc.timer); vc.timer = setInterval(vcTick, 1000);
+  }
+  vc.state = st; vcRender();
+}
 
 function vcCaption(id, who, text, final) {
   const prev = vc.caps.get(id);
@@ -3036,15 +3058,22 @@ function vcRender() {
   const view = document.getElementById('voiceView');
   if (!view || !vc.agent) return;
   const a = vc.agent;
-  view.innerHTML = `<div class="vc-top"><span class="vc-badge">🎙️ Mode suara</span><span class="vc-who">${escapeHtml(a.name)} · ${escapeHtml(a.role)}</span></div>
+  view.innerHTML = `<div class="vc-top"><span class="vc-badge">🎙️ Mode suara</span><span class="vc-who">${escapeHtml(a.role)}</span></div>
     <div class="vc-stage">
       <div class="vc-orb ${escapeAttr(vc.state)}"><span class="vc-ring r1"></span><span class="vc-ring r2"></span><img src="${a.img}" alt="${escapeAttr(a.name)}"></div>
-      <div class="vc-state">${escapeHtml(VC_STATE[vc.state] || vc.state)}</div>
+      <div class="vc-name">${escapeHtml(a.name)}</div>
+      <div class="vc-state">${vc.startedAt ? `<span class="vc-timer" id="vcTimer">${vcClock()}</span> · ` : ''}${escapeHtml(VC_STATE[vc.state] || vc.state)}</div>
       <div class="vc-caps" id="vcCaps"></div>
     </div>
     <div class="vc-bar">
-      <button type="button" class="vc-btn${vc.muted ? ' on' : ''}" onclick="voiceMute()" title="${vc.muted ? 'Nyalakan mikrofon' : 'Bisukan mikrofon'}">${vc.muted ? '🔇' : '🎤'}<span>${vc.muted ? 'Dibisukan' : 'Mikrofon'}</span></button>
-      <button type="button" class="vc-btn end" onclick="voiceEnd()" title="Akhiri panggilan">✕<span>Akhiri</span></button>
+      <div class="vc-ctl">
+        <button type="button" class="vc-btn mic${vc.muted ? ' muted' : ''}" onclick="voiceMute()" aria-pressed="${vc.muted}" aria-label="${vc.muted ? 'Nyalakan mikrofon' : 'Bisukan mikrofon'}" title="${vc.muted ? 'Nyalakan mikrofon' : 'Bisukan mikrofon'}">${vc.muted ? VC_ICON.micOff : VC_ICON.mic}</button>
+        <span>${vc.muted ? 'Dibisukan' : 'Bisukan'}</span>
+      </div>
+      <div class="vc-ctl">
+        <button type="button" class="vc-btn end" onclick="voiceEnd()" aria-label="Akhiri panggilan" title="Akhiri panggilan">${VC_ICON.hangup}</button>
+        <span>Akhiri</span>
+      </div>
     </div>`;
   vcRenderCaps();
 }
@@ -3071,6 +3100,7 @@ async function voiceEnd(silent) {
 function vcEnded(silent) {
   if (vc.state === 'ended') return;
   vc.state = 'ended';
+  clearInterval(vc.timer); vc.timer = null; vc.startedAt = 0;
   document.querySelectorAll('#vcAudio').forEach((el) => el.remove());
   document.getElementById('voiceView').classList.add('hidden');
   if (vc.room) { vc.room = null; }

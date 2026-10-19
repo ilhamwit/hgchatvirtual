@@ -7,6 +7,7 @@ const path = require('node:path');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
 const js = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'style.css'), 'utf8');
 // The owner's order (2026-10-18): no dropdown, no Inbox.
 const ITEMS = [['groups', 'Pilih Group', 'waGroupsPage'], ['summary', 'Summary Chat', 'waSummaryPage'], ['connect', 'Koneksikan WA', 'waConnect']];
 
@@ -154,4 +155,13 @@ test('voice mode: header button, full-screen view, vendored LiveKit client loade
   assert.match(js, /api\('POST', '\/api\/voice\/session', \{ agentId: agent\.id \}\)/);
   assert.match(js, /registerTextStreamHandler\('lk\.transcription'/, 'captions from LiveKit transcriptions');
   assert.match(js, /refreshConvs\(\)\.then\(\(\) => openConversation\(agentId, id\)\)/, 'the transcript is the chat afterwards');
+});
+
+test('voice mode: WhatsApp-call style controls (round mute, red hang-up, call clock)', () => {
+  assert.match(js, /class="vc-btn mic\$\{vc\.muted \? ' muted' : ''\}" onclick="voiceMute\(\)" aria-pressed=/);
+  assert.match(js, /class="vc-btn end" onclick="voiceEnd\(\)" aria-label="Akhiri panggilan"/);
+  assert.match(js, /hangup: '<svg/);
+  assert.match(js, /clearInterval\(vc\.timer\); vc\.timer = null; vc\.startedAt = 0;/, 'the clock stops when the call ends');
+  assert.match(css, /\.vc-btn\.end\{background:#EA0038;\}/);
+  assert.match(css, /\.vc-btn\{width:64px;height:64px;border-radius:50%;/);
 });

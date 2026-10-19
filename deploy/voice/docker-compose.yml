@@ -35,7 +35,7 @@ services:
       - PIPER_MODEL=/opt/piper/models/id_ID-news_tts-medium.onnx
       - HOME=/root
       - HF_HOME=/host-cache/huggingface
-      - NUM_IDLE_PROCESSES=${NUM_IDLE_PROCESSES:-0}
+      - NUM_IDLE_PROCESSES=${NUM_IDLE_PROCESSES:-1}
     volumes:
       - ./app.py:/app/app.py:ro                       # our worker, over Reddie's
       - ${AURIX_KIT:-/home/hg/aurix-kit}/voices:/app/voices:ro

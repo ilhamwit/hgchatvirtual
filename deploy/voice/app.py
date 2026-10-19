@@ -14,7 +14,9 @@ import asyncio
 import json
 import logging
 import os
+import random
 import re
+import time
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
@@ -23,6 +25,7 @@ from openai import AsyncOpenAI
 
 from livekit.agents import (
     Agent,
+    inference,
     AgentServer,
     AgentSession,
     InterruptionOptions,
@@ -61,12 +64,24 @@ def speakable(piece: str) -> str:
 AGENT_IDS = [a.strip() for a in os.getenv("CHAT_AGENTS", "dave,jaden,joel,dylan,nana").split(",") if a.strip()]
 
 VOICE_RULES = (
-    "[Mode suara] Kamu sedang mengobrol lewat suara dengan anggota tim HG. Jawab seperti bicara: "
-    "Bahasa Indonesia lisan yang santai, ringkas, 1–3 kalimat, langsung ke intinya. Tanpa markdown, tanpa "
+    "[Mode suara] Kamu sedang mengobrol lewat suara dengan anggota tim HG. Jawab seperti bicara di telepon: "
+    "Bahasa Indonesia lisan yang santai dan langsung ke intinya. Biasanya 1–3 kalimat; kalau diminta detail, "
+    "boleh lebih panjang tetapi tetap mengalir seperti ucapan, bukan daftar. Tanpa markdown, tanpa "
     "bintang/pagar/daftar bernomor, tanpa emoji, tanpa teks aksi dalam kurung. Angka dan singkatan ditulis "
-    "seperti diucapkan. Boleh memakai tool bila benar-benar perlu, tetapi utamakan jawaban cepat. "
+    "seperti diucapkan. Pakai tool kalau memang dibutuhkan untuk menjawab dengan benar (cek data, cari info). "
+    "Ucapan pengguna berasal dari pengenalan suara, jadi bisa ada kata yang salah dengar atau terpotong: "
+    "tebak maksud yang paling masuk akal dari konteks, dan tanya balik singkat kalau benar-benar tidak jelas. "
     "Jangan mengirim pesan ke WhatsApp/Telegram/email: jawabanmu langsung diucapkan ke pengguna."
 )
+REMINDER = "[Mode suara: jawab lisan, tanpa markdown/emoji; ucapan pengguna hasil pengenalan suara]"
+
+# While Hermes is still working (tools, long thinking) the caller hears a
+# short line instead of silence. FLUSH makes the TTS speak it at once.
+FLUSH = "\u2063"
+FILLER_AFTER = float(os.getenv("VOICE_FILLER_AFTER", "1.6"))
+FILLER_AGAIN = float(os.getenv("VOICE_FILLER_AGAIN", "12"))
+FILLERS = ["Sebentar, saya cek dulu ya.", "Oke, saya lihat dulu sebentar.", "Baik, tunggu sebentar ya."]
+FILLERS_AGAIN = ["Masih saya proses, sebentar lagi ya.", "Masih saya cek, tunggu sebentar ya."]
 
 
 def create_stt():
@@ -103,9 +118,29 @@ def setup(proc: JobProcess):
     logger.info("models ready")
 
 
+def pending_user_text(items):
+    """Everything the person said since the agent last spoke, in order.
+
+    Speech often arrives as several short segments ("kamu bisa" + "carikan
+    berita ..."); sending only the last one loses the question. Returns the
+    joined text and the assistant message just before it (or None)."""
+    said, before = [], None
+    for item in reversed(items):
+        if getattr(item, "type", "") != "message":
+            continue
+        if item.role == "assistant":
+            before = item
+            break
+        if item.role == "user":
+            t = (item.text_content or "").strip()
+            if t:
+                said.append(t)
+    return " ".join(reversed(said)), before
+
+
 class HermesAgent(Agent):
-    """Sends only the newest message to Hermes: Hermes keeps the transcript
-    (X-Hermes-Session-Id), exactly like the text chat does."""
+    """Sends only the person's newest words to Hermes: Hermes keeps the
+    transcript (X-Hermes-Session-Id), exactly like the text chat does."""
 
     def __init__(self, agent_id: str, session_id: str, greeting: str):
         super().__init__(instructions=VOICE_RULES)
@@ -118,35 +153,103 @@ class HermesAgent(Agent):
         self.turns = 0
 
     async def llm_node(self, chat_ctx, tools, model_settings):
-        # The person's newest words; before they have said anything, the greeting.
-        last = None
-        for item in reversed(chat_ctx.items):
-            if getattr(item, "type", "") == "message" and item.role == "user":
-                last = item
-                break
-        text = ((last.text_content if last is not None else "") or "").strip() or self.greeting
+        text, before = pending_user_text(chat_ctx.items)
+        text = text or self.greeting
         # The rules go with the first turn (Hermes remembers them), then a short reminder.
-        prefix = VOICE_RULES if self.turns == 0 else "[Mode suara: jawab lisan, singkat, tanpa markdown]"
+        prefix = VOICE_RULES if self.turns == 0 else REMINDER
+        if before is not None and getattr(before, "interrupted", False):
+            heard = (before.text_content or "").strip()
+            prefix += f"\n[Jawabanmu sebelumnya dipotong pengguna; yang sempat terdengar hanya: \"{heard[-300:]}\"]"
         self.turns += 1
+
+        pieces = self._hermes(f"{prefix}\n\n{text}").__aiter__()
+        fillers = [(FILLER_AFTER, FILLERS), (FILLER_AGAIN, FILLERS_AGAIN)]
+        started = time.monotonic()
+        got = False
+        nxt = asyncio.ensure_future(pieces.__anext__())
         try:
-            stream = await self.client.chat.completions.create(
-                model=self.agent_id, stream=True,
-                messages=[{"role": "user", "content": f"{prefix}\n\n{text}"}],
-            )
-            got = False
+            while True:
+                timeout = None
+                if fillers:
+                    timeout = max(0.0, fillers[0][0] - (time.monotonic() - started))
+                done, _ = await asyncio.wait({nxt}, timeout=timeout)
+                if not done:
+                    # Only before the answer starts, or during a long tool pause
+                    # once the answer has gone quiet; never mid-sentence.
+                    _, lines = fillers.pop(0)
+                    if not got:
+                        yield random.choice(lines) + " " + FLUSH
+                    continue
+                try:
+                    piece = nxt.result()
+                except StopAsyncIteration:
+                    break
+                if not got:
+                    fillers.clear()          # the answer has started: no more fillers
+                got = True
+                yield piece
+                nxt = asyncio.ensure_future(pieces.__anext__())
+            if not got:
+                yield "Maaf, saya tidak mendapat jawaban. Coba ulangi."
+        except Exception as err:
+            logger.warning("hermes failed: %s", err)
+            yield "Maaf, saya sedang tidak bisa menjawab. Coba lagi sebentar."
+        finally:
+            if not nxt.done():
+                nxt.cancel()
+                try:
+                    await nxt
+                except BaseException:
+                    pass
+            await pieces.aclose()
+
+    async def _hermes(self, content: str):
+        stream = await self.client.chat.completions.create(
+            model=self.agent_id, stream=True, messages=[{"role": "user", "content": content}],
+        )
+        try:
             async for chunk in stream:
                 if not chunk.choices:
                     continue
                 delta = chunk.choices[0].delta
                 piece = speakable(getattr(delta, "content", None) or "")   # reasoning_content is never spoken
                 if piece:
-                    got = True
                     yield piece
-            if not got:
-                yield "Maaf, saya tidak mendapat jawaban. Coba ulangi."
-        except Exception as err:
-            logger.warning("hermes failed: %s", err)
-            yield "Maaf, saya sedang tidak bisa menjawab. Coba lagi sebentar."
+        finally:
+            await stream.close()
+
+    async def tts_node(self, text, model_settings):
+        """The default TTS node, plus FLUSH: speak the buffered sentence now
+        instead of waiting for the next one (used by the filler line)."""
+        activity = self._get_activity_or_raise()
+        conn_options = activity.session.conn_options.tts_conn_options
+        async with activity.tts.stream(conn_options=conn_options) as stream:
+
+            async def forward():
+                async for chunk in text:
+                    if FLUSH in chunk:
+                        rest = chunk.replace(FLUSH, "")
+                        if rest:
+                            stream.push_text(rest)
+                        stream.flush()
+                    else:
+                        stream.push_text(chunk)
+                stream.end_input()
+
+            task = asyncio.create_task(forward())
+            try:
+                async for ev in stream:
+                    yield ev.frame
+            finally:
+                task.cancel()
+                try:
+                    await task
+                except BaseException:
+                    pass
+
+    async def transcription_node(self, text, model_settings):
+        async for delta in text:
+            yield delta.replace(FLUSH, "") if isinstance(delta, str) and FLUSH in delta else delta
 
 
 async def post_turn(http: aiohttp.ClientSession, conversation_id: str, role: str, text: str):
@@ -169,7 +272,7 @@ server = AgentServer(
     setup_fnc=setup,
     host="127.0.0.1",                       # health server stays local (host network)
     port=int(os.getenv("WORKER_PORT", "8093")),
-    num_idle_processes=int(os.getenv("NUM_IDLE_PROCESSES", "0")),
+    num_idle_processes=int(os.getenv("NUM_IDLE_PROCESSES", "1")),   # one warm process: no model load on pickup
     initialize_process_timeout=120.0,
     shutdown_process_timeout=2.0,
     session_end_timeout=2.0,
@@ -208,9 +311,20 @@ async def entrypoint(ctx: JobContext):
         stt=stt.StreamAdapter(stt=stt_instance, vad=vad),
         tts=tts.StreamAdapter(tts=tts_instance, sentence_tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=18, stream_context_len=6)),
         turn_handling=TurnHandlingOptions(
-            endpointing_delay=0.15,
-            interruption=InterruptionOptions(mode="vad", min_duration=0.12, min_words=0, discard_audio_if_uninterruptible=True),
-            preemptive_tts=True,
+            # Local end-of-turn model (the cloud one needs LiveKit Cloud keys).
+            turn_detection=inference.TurnDetector(version="v1-mini"),
+            # Wait a little after the person stops; longer when the model thinks
+            # the sentence is not finished. Whisper needs ~0.4 s after speech ends.
+            endpointing={"min_delay": float(os.getenv("VOICE_MIN_DELAY", "0.6")),
+                         "max_delay": float(os.getenv("VOICE_MAX_DELAY", "2.5"))},
+            # Only real speech interrupts the agent; a cough or "hmm" does not,
+            # and a false interruption resumes the answer.
+            interruption=InterruptionOptions(mode="vad", min_duration=float(os.getenv("VOICE_INTERRUPT_MIN", "0.6")),
+                                             min_words=0, resume_false_interruption=True,
+                                             false_interruption_timeout=1.5, discard_audio_if_uninterruptible=True),
+            # No speculative requests: each Hermes request may run tools, so it
+            # must be sent once, for the finished sentence.
+            preemptive_generation={"enabled": False},
         ),
     )
 
@@ -221,7 +335,7 @@ async def entrypoint(ctx: JobContext):
         item = ev.item
         if getattr(item, "type", "") != "message" or item.role not in ("user", "assistant"):
             return
-        text = (item.text_content or "").strip()
+        text = (item.text_content or "").replace(FLUSH, "").strip()
         if text and not text.startswith("[Mode suara"):
             asyncio.create_task(post_turn(http, conversation_id, item.role, text))
 
