@@ -70,6 +70,7 @@ memeriksa bahwa nomor itu memang baru menulis di grup tersebut (arsip grup,
 - 2026-10-19 Restart oleh agent: PID 826375 → 890569, gates PASS, `/healthz` ok, skema v10 — live; `/api/v1/events` tanpa key → 401 JSON lewat Cloudflare. Menunggu pemilik: buat key, jalankan `scripts/install-hermes-skill.sh`, uji dari grup (T-082).
 - 2026-10-19 Permintaan pemilik: nama bot WhatsApp di Chat Center ditulis **Aurix**, bukan "Rederp" (UI Profil, Integrasi API, README, skrip pasang, dokumen ini). Nama yang terlihat di grup WhatsApp berasal dari nama profil akun WhatsApp bot (`creds.json` → "Rederp") dan diganti pemilik dari aplikasi WhatsApp.
 - 2026-10-19 Pemilik memasang integrasi: key "Aurix" (cc_eBU97Xf…, buat+lihat) aktif, `~/.config/chat-center-agent.key` mode 600, skill di `~/.hermes/skills/productivity/chat-center` identik dengan repo dan berstatus *enabled* di `hermes skills list`, `chat_center.py list` → 200. Nomor terverifikasi: ilham. Tinggal uji dari grup (T-082).
+- 2026-10-19 Atas permintaan pemilik, Irfan dan Herry dijadikan admin (bisa mengelola API key) dengan perintah baru `node scripts/users.js set-role <user> admin|member` (audit `role_changed`, berlaku tanpa login ulang). Restart PID 895694 → 910227. Admin sekarang: ilham, irfan, herry; cahyo tetap member.
 
 ## Dependencies
 
