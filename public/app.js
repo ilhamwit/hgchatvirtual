@@ -2729,7 +2729,7 @@ async function stLoad() {
   try {
     if (st.tab === 'users') st.users = (await api('GET', '/api/settings/users')).users;
     else if (st.tab === 'keys') { const r = await api('GET', '/api/integrations/keys'); pf.keys = r.keys; pf.scopes = r.scopes; }
-    else st.status = await api('GET', '/api/settings/status');
+    else { st.status = await api('GET', '/api/settings/status'); try { st.status.voice = await api('GET', '/api/voice/status'); } catch (e) { st.status.voice = null; } }
   } catch (e) { showToast(e.message); }
   if (waPage === 'settings') stRender();
 }
@@ -2814,6 +2814,7 @@ function stSystemHtml() {
         ${row('Backup terakhir', s.backup ? `${pill('ada', 'ada')} <span class="wa-sub">${escapeHtml(schWibStamp(s.backup.at))} · ${fmtBytes(s.backup.size)} · ${s.backup.count} file</span>` : `${pill('belum ada', 'ada')} <span class="wa-sub">jalankan <code>bash scripts/install-backup-timer.sh</code></span>`)}
         ${row('Hermes (agent)', pill(s.hermes, 'ok'))}
         ${row('Bot WhatsApp', s.whatsapp ? `${pill(s.whatsapp.bridge, 'connected')} <span class="wa-sub">${s.whatsapp.phone ? '+' + escapeHtml(s.whatsapp.phone) + (s.whatsapp.name ? ' · ' + escapeHtml(s.whatsapp.name) : '') : ''}</span>` : '—')}
+        ${row('Mode suara', s.voice ? (s.voice.enabled ? `${pill(s.voice.livekit || 'unreachable', 'ok')} <span class="wa-sub">LiveKit ${escapeHtml(s.voice.url || '')} · worker: <code>docker logs chat-center-voice</code></span>` : `${pill('nonaktif', 'ok')} <span class="wa-sub">jalankan <code>bash scripts/install-voice.sh</code></span>`) : '—')}
         ${row('Akun & sesi', `${s.counts.users} akun aktif · ${s.counts.sessions} sesi login`)}
       </div>
       <p class="wa-sub">Restart server: <code>bash scripts/restart.sh</code> (menjalankan tes dulu). Log: <code>journalctl --user-unit=chat-center -n 50</code>.</p></div>`;
@@ -2964,6 +2965,123 @@ function soonOpen(key) {
       <div class="wa-sub">Menu ini sedang disiapkan. Masukan tentang apa yang paling berguna bisa disampaikan di <a href="#discuss" onclick="event.preventDefault();openWaPage('discuss')">#umum</a>.</div>
     </div></div>`;
 }
+
+/* ── Voice mode (EPIC-016) ─────────────
+   🎙️ in the chat header opens a full-screen call with the current agent.
+   Chat Center starts a new conversation and mints a LiveKit token; the
+   browser joins the room with the microphone; the voice worker (deploy/voice)
+   answers with the agent's Hermes profile. Captions come from LiveKit's
+   transcription stream; the transcript lands in the conversation. */
+const vc = { room: null, agent: null, convId: null, state: 'idle', muted: false, caps: new Map(), lib: null, status: null };
+const VC_STATE = { connecting: 'Menghubungkan…', listening: 'Mendengarkan…', thinking: 'Berpikir…', speaking: 'Berbicara…', initializing: 'Menyiapkan…', ended: 'Panggilan selesai' };
+
+async function vcLib() {
+  if (window.LivekitClient) return window.LivekitClient;
+  if (!vc.lib) vc.lib = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = '/vendor/livekit-client.umd.min.js'; s.onload = () => resolve(window.LivekitClient); s.onerror = () => reject(new Error('pustaka suara tidak termuat'));
+    document.head.appendChild(s);
+  });
+  return vc.lib;
+}
+
+async function voiceStart() {
+  if (vc.room) return;
+  const agent = current;
+  const view = document.getElementById('voiceView');
+  vc.agent = agent; vc.state = 'connecting'; vc.muted = false; vc.caps = new Map();
+  view.classList.remove('hidden');
+  vcRender();
+  let s;
+  try {
+    const st = await api('GET', '/api/voice/status');
+    if (!st.enabled) throw new Error('Mode suara belum aktif di server ini.');
+    s = await api('POST', '/api/voice/session', { agentId: agent.id });
+    vc.convId = s.conversationId;
+    const LK = await vcLib();
+    const room = new LK.Room({ adaptiveStream: true, dynacast: true });
+    vc.room = room;
+    room.on(LK.RoomEvent.ParticipantAttributesChanged, (attrs, p) => { if (p.isAgent || (attrs && attrs['lk.agent.state'])) vcSetState(attrs['lk.agent.state'] || p.attributes['lk.agent.state']); });
+    room.on(LK.RoomEvent.ParticipantConnected, (p) => { if (p.isAgent) vcSetState(p.attributes['lk.agent.state'] || 'listening'); });
+    room.on(LK.RoomEvent.TrackSubscribed, (track) => { if (track.kind === 'audio') { const el = track.attach(); el.id = 'vcAudio'; document.body.appendChild(el); } });
+    room.on(LK.RoomEvent.TrackUnsubscribed, (track) => track.detach().forEach((el) => el.remove()));
+    room.on(LK.RoomEvent.Disconnected, () => vcEnded());
+    room.registerTextStreamHandler('lk.transcription', async (reader, participant) => {
+      const id = reader.info.attributes['lk.segment_id'] || reader.info.id;
+      const who = participant && participant.identity && !participant.identity.startsWith('agent-') && participant.identity !== room.localParticipant.identity ? 'agent' : (participant && participant.identity === room.localParticipant.identity ? 'me' : 'agent');
+      let text = '';
+      for await (const chunk of reader) { text += chunk; vcCaption(id, who, text, false); }
+      vcCaption(id, who, text, true);
+    });
+    await room.connect(s.url, s.token);
+    await room.localParticipant.setMicrophoneEnabled(true);
+    vcSetState('initializing');
+  } catch (e) {
+    if (e && e.name === 'NotAllowedError') showToast('Izinkan mikrofon untuk mode suara');
+    else showToast('⚠️ ' + (e.message || 'gagal memulai panggilan'));
+    await voiceEnd(true);
+  }
+}
+
+function vcSetState(st) { if (!st || vc.state === 'ended') return; vc.state = st; vcRender(); }
+
+function vcCaption(id, who, text, final) {
+  const prev = vc.caps.get(id);
+  vc.caps.set(id, { who, text, final, at: prev ? prev.at : Date.now() });
+  if (vc.caps.size > 12) vc.caps.delete(vc.caps.keys().next().value);
+  vcRenderCaps();
+}
+
+function vcRender() {
+  const view = document.getElementById('voiceView');
+  if (!view || !vc.agent) return;
+  const a = vc.agent;
+  view.innerHTML = `<div class="vc-top"><span class="vc-badge">🎙️ Mode suara</span><span class="vc-who">${escapeHtml(a.name)} · ${escapeHtml(a.role)}</span></div>
+    <div class="vc-stage">
+      <div class="vc-orb ${escapeAttr(vc.state)}"><span class="vc-ring r1"></span><span class="vc-ring r2"></span><img src="${a.img}" alt="${escapeAttr(a.name)}"></div>
+      <div class="vc-state">${escapeHtml(VC_STATE[vc.state] || vc.state)}</div>
+      <div class="vc-caps" id="vcCaps"></div>
+    </div>
+    <div class="vc-bar">
+      <button type="button" class="vc-btn${vc.muted ? ' on' : ''}" onclick="voiceMute()" title="${vc.muted ? 'Nyalakan mikrofon' : 'Bisukan mikrofon'}">${vc.muted ? '🔇' : '🎤'}<span>${vc.muted ? 'Dibisukan' : 'Mikrofon'}</span></button>
+      <button type="button" class="vc-btn end" onclick="voiceEnd()" title="Akhiri panggilan">✕<span>Akhiri</span></button>
+    </div>`;
+  vcRenderCaps();
+}
+function vcRenderCaps() {
+  const el = document.getElementById('vcCaps');
+  if (!el) return;
+  const items = [...vc.caps.values()].sort((x, y) => x.at - y.at).slice(-6);
+  el.innerHTML = items.map((c) => `<div class="vc-cap ${c.who}${c.final ? '' : ' live'}"><b>${c.who === 'me' ? (ME ? escapeHtml(ME.displayName.split(' ')[0]) : 'Anda') : escapeHtml(vc.agent.name)}</b>${escapeHtml(c.text)}</div>`).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+async function voiceMute() {
+  if (!vc.room) return;
+  vc.muted = !vc.muted;
+  try { await vc.room.localParticipant.setMicrophoneEnabled(!vc.muted); } catch (e) { /* keep state */ }
+  vcRender();
+}
+
+async function voiceEnd(silent) {
+  const room = vc.room; vc.room = null;
+  if (room) { try { await room.disconnect(); } catch (e) { /* already closed */ } }
+  vcEnded(silent);
+}
+function vcEnded(silent) {
+  if (vc.state === 'ended') return;
+  vc.state = 'ended';
+  document.querySelectorAll('#vcAudio').forEach((el) => el.remove());
+  document.getElementById('voiceView').classList.add('hidden');
+  if (vc.room) { vc.room = null; }
+  // Show the call's conversation: its transcript is the chat.
+  if (vc.convId && vc.agent) {
+    const agentId = vc.agent.id; const id = vc.convId; vc.convId = null;
+    refreshConvs().then(() => openConversation(agentId, id));
+    if (!silent) showToast('Panggilan selesai — transkrip ada di sesi ini');
+  }
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && vc.room) voiceEnd(); });
 
 /* ── Page registry: one container per WhatsApp page ── */
 const WA_IMPL = {

@@ -1,0 +1,77 @@
+# EPIC-016: Voice Mode — Ngobrol Suara dengan Agent
+
+status: on-progress
+environment: dev
+phase: 3
+priority: P1
+area: Fullstack + Infra
+retries: 0
+prd: ../product/PRD.md
+stories: US-VOI-1 … US-VOI-4
+tasks: T-094 … T-101
+
+## Goal
+
+Tombol **suara** di chat setiap agent: tampilan berubah menjadi mode bicara
+(seperti voice ChatGPT) — user tinggal ngobrol, agent menjawab dengan suara,
+dan di belakangnya terbuka **sesi chat baru** yang berisi transkripnya, jadi
+setelah panggilan percakapan bisa dilanjutkan lewat teks.
+
+Mesin suaranya **sama dengan aurix.herrygunawan.com** (`~/aurix-kit`): LiveKit
+(WebRTC) + Silero VAD + Whisper GPU (Bahasa Indonesia) + OmniVoice (suara per
+agent). Yang berbeda: **otaknya Hermes** — profil agent yang sama dengan chat
+teks (`/p/<agent>/v1/chat/completions`, streaming), bukan OpenClaw/DeepSeek
+langsung. Sesi Hermes-nya = sesi chat Chat Center (`hgchat-<id>`), sehingga
+agent ingat obrolan suara saat dilanjutkan lewat teks.
+
+Keputusan pemilik (2026-10-19): **opsi A** — LiveKit terpisah untuk Chat
+Center (worker Reddie di aurix-kit otomatis bergabung ke semua room di
+LiveKit-nya, jadi tidak bisa berbagi). Pemilik menambahkan hostname
+`voice.herrygunawan.com` di Cloudflare dan port forward di router.
+
+Temuan riset:
+- Hermes API server mendukung `stream: true` (SSE OpenAI); chunk pertama ±1,2 s.
+  Chunk `reasoning_content` harus diabaikan (jangan diucapkan).
+- GPU RTX 5080 16 GB: backend Reddie memakai ±8,6 GB (2 proses idle). Worker
+  kita memakai 0 proses idle → model dimuat saat panggilan pertama.
+- Server di belakang NAT dengan IP publik dinamis; LiveKit membaca IP eksternal
+  saat start (`use_external_ip`). Risiko yang sudah ada juga di aurix-kit.
+
+## User Stories
+
+- **US-VOI-1** — Sebagai anggota tim, saya ingin menekan tombol suara lalu langsung ngobrol dengan agent.
+- **US-VOI-2** — Sebagai anggota tim, saya ingin melihat teks percakapan (caption) saat bicara, dan transkripnya tersimpan sebagai sesi chat.
+- **US-VOI-3** — Sebagai anggota tim, saya ingin tiap agent punya suaranya sendiri.
+- **US-VOI-4** — Sebagai admin, saya ingin tahu status mesin suara (LiveKit, worker) di Settings → Sistem.
+
+## Tasks
+
+### Infra
+- [x] **T-094** `deploy/voice/`: LiveKit #2 (port 7890 ws, 7891 tcp, 7892 udp, ICE 60001–61000), worker suara (image Reddie + `app.py` kita, GPU), `scripts/install-voice.sh` (buat key, tulis `.env`, `docker compose up`, cetak langkah Cloudflare & router).
+- [x] **T-095** Worker: VAD + Whisper + OmniVoice seperti Reddie; LLM = Hermes profil dari metadata peserta, header `X-Hermes-Session-Id`; `agent_name="hg-voice"` (dispatch eksplisit); suara per agent dari metadata; transkrip dikirim ke Chat Center; pengisi jeda bila Hermes lambat (>2,5 s).
+
+### Chat Center
+- [x] **T-096** `lib/voice.js`: token LiveKit (JWT HS256 tanpa dependensi) dengan grant room + `roomConfig.agents` + metadata; `POST /api/voice/session` membuat sesi chat (judul "Panggilan suara…") dan token; `POST /api/v1/voice/turns` (key worker) menulis transkrip ke sesi.
+- [x] **T-097** UI mode suara: tombol 🎙️ di kepala chat → layar penuh (avatar agent berdenyut, status Mendengarkan/Berpikir/Berbicara, caption dua arah, bisukan, akhiri); `livekit-client` di `public/vendor/`; setelah selesai, sesi chat menampilkan transkrip.
+- [x] **T-098** Suara per agent (Dave male_young, Jaden female_assistant, Joel male_news, Dylan male_teen, Nana female_cs) — dapat diubah lewat env `CHAT_VOICE_PROFILES`.
+- [x] **T-099** Settings → Sistem: status LiveKit suara & worker.
+
+### Uji
+- [ ] **T-100** Uji nyata lewat voice.herrygunawan.com dari browser (pemilik), termasuk HP.
+- [ ] **T-101** Penyempurnaan: interupsi, latensi, mobile.
+
+## Acceptance Criteria
+
+- Token LiveKit hanya untuk user login, hanya room miliknya, kedaluwarsa ≤ 1 jam; worker Reddie tidak pernah masuk ke room Chat Center.
+- Transkrip (user + agent) tersimpan di sesi chat agent itu; melanjutkan lewat teks memakai sesi Hermes yang sama.
+- Teks `reasoning_content` tidak pernah diucapkan.
+- Tanpa LiveKit/worker, tombol suara menjelaskan "mesin suara belum aktif" — chat teks tetap berjalan.
+
+## Automation Log
+
+- 2026-10-19 Epic dibuat; riset aurix-kit (compose, app.py Reddie, livekit-agents 1.6.6, plugin OmniVoice/FasterWhisper, token API), Hermes streaming OK, NAT + IP dinamis ditemukan — on-progress
+- 2026-10-19 T-094…T-099 dibangun. `deploy/voice/`: compose (LiveKit #2 + worker image Reddie dengan `app.py` kita, GPU, `host.docker.internal` ke Hermes & Chat Center), `livekit.yaml.example`, `.env.example`, `scripts/install-voice.sh` (buat key, tulis `.env`/`livekit.yaml` 600, tulis `CHAT_VOICE_*` ke env Chat Center, compose up, cetak langkah Cloudflare/router). Worker: `@server.rtc_session(agent_name="hg-voice")` (AgentServer 1.6.6 tidak menerima agent_name di konstruktor), `HermesAgent.llm_node` hanya mengirim pesan terbaru ke `/p/<agent>/v1` dengan `X-Hermes-Session-Id`, aturan mode suara di giliran pertama + pengingat singkat tiap giliran, `reasoning_content` diabaikan, transkrip user/assistant → `POST /api/v1/voice/turns`. Chat Center: `lib/voice.js` (JWT HS256 tanpa dependensi: grant room + `roomConfig.agents` + metadata agent/conversationId/hermesSession/user/voiceProfile; sesi = percakapan baru "🎙️ Panggilan suara · <waktu>"; turns dengan kunci worker, timingSafeEqual), `GET /api/voice/status`, `POST /api/voice/session`, `POST /api/v1/voice/turns`. UI: tombol Suara di kepala chat, layar penuh (orb avatar berdenyut per state `lk.agent.state`, caption dua arah dari stream `lk.transcription`, bisukan, akhiri, Esc), setelah selesai membuka sesi transkrip; Settings → Sistem baris Mode suara. Tes 142/142 (3 baru), gates PASS. Belum: `public/vendor/livekit-client.umd.min.js` (perlu unduhan, izin pemilik), hostname Cloudflare & port forward (pemilik), uji nyata (T-100).
+
+## Dependencies
+
+- EPIC-007 (Hermes), EPIC-002 (sesi chat), EPIC-013 (API key worker), aurix-kit (image & model GPU).

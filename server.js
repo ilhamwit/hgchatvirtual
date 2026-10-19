@@ -27,6 +27,7 @@ const { createNotifier } = require('./lib/notify');
 const { createIntegrations } = require('./lib/integrations');
 const { createSettings } = require('./lib/settings');
 const { createReports } = require('./lib/reports');
+const { createVoice } = require('./lib/voice');
 
 // Fail fast on bad config. Production (systemd) must provide the Hermes
 // API key; CHAT_DEV=1 is the explicit opt-out for local UI work. See .env.example.
@@ -152,6 +153,9 @@ const reports = createReports({
 });
 reports.start();
 
+// Voice mode (EPIC-016): LiveKit tokens + transcripts; the engine is deploy/voice.
+const voice = createVoice({ db, agents: AGENTS });
+
 const api = createApi({
   db,
   gateway,
@@ -167,7 +171,8 @@ const api = createApi({
   notifier,
   integrations,
   settings,
-  reports
+  reports,
+  voice
 });
 
 // Keep only a basename, and only characters that are safe in a shell argument
@@ -469,7 +474,7 @@ const server = http.createServer((req, res) => {
     res.end(data);
   });
 }).listen(PORT, '127.0.0.1', () => {
-  console.log(`Chat Center server running at http://127.0.0.1:${PORT} (Hermes ${GATEWAY}, agents ${AGENTS.join(', ')})`);
+  console.log(`Chat Center server running at http://127.0.0.1:${PORT} (Hermes ${GATEWAY}, agents ${AGENTS.join(', ')}, voice ${voice.enabled ? 'on' : 'off'})`);
   if (DEV) console.log('CHAT_DEV=1: development mode' + (HERMES_API_KEY ? '' : ' (no Hermes key)'));
 });
 

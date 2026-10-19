@@ -145,3 +145,13 @@ test('Reports opens #reports with a live unread badge', () => {
     assert.match(js, new RegExp(`\\b${k}: \\{ el: '${k}Page', open: \\(\\) => soonOpen\\('${k}'\\)`), k + ' is a coming-soon page');
   }
 });
+
+// EPIC-016: the voice button and the full-screen call view.
+test('voice mode: header button, full-screen view, vendored LiveKit client loaded lazily', () => {
+  assert.match(html, /<button class="ch-act voice" id="voiceBtn" type="button" onclick="voiceStart\(\)"/);
+  assert.match(html, /<div class="vc hidden" id="voiceView" role="dialog"/);
+  assert.match(js, /s\.src = '\/vendor\/livekit-client\.umd\.min\.js'/);
+  assert.match(js, /api\('POST', '\/api\/voice\/session', \{ agentId: agent\.id \}\)/);
+  assert.match(js, /registerTextStreamHandler\('lk\.transcription'/, 'captions from LiveKit transcriptions');
+  assert.match(js, /refreshConvs\(\)\.then\(\(\) => openConversation\(agentId, id\)\)/, 'the transcript is the chat afterwards');
+});

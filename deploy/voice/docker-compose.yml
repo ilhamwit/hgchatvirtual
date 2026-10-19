@@ -1,0 +1,58 @@
+# Voice mode for Chat Center (EPIC-016): its own LiveKit server plus a voice
+# worker whose brain is Hermes. Same engine as ~/aurix-kit (Reddie), own
+# ports and keys, so the Reddie worker never joins Chat Center rooms.
+#
+#   bash scripts/install-voice.sh     (from the Chat Center folder)
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: chat-center-livekit
+    command: --config /etc/livekit.yaml
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "127.0.0.1:7890:7890"   # signaling (WebSocket) — published through Cloudflare as voice.herrygunawan.com
+      - "7891:7891"             # RTC over TCP (fallback)
+      - "7892:7892/udp"         # RTC over UDP
+      - "60001-61000:60001-61000/udp"   # ICE range
+    restart: unless-stopped
+    networks: [voice-net]
+
+  worker:
+    image: ghcr.io/zakie0161/realtime-voice-assistant:latest
+    container_name: chat-center-voice
+    env_file: .env
+    environment:
+      - LIVEKIT_URL=ws://livekit:7890
+      - HERMES_URL=http://host.docker.internal:8642
+      - CHAT_CENTER_URL=http://host.docker.internal:8643
+      - PIPER_BINARY=/opt/piper/piper
+      - PIPER_MODEL=/opt/piper/models/id_ID-news_tts-medium.onnx
+      - HOME=/root
+      - HF_HOME=/host-cache/huggingface
+      - NUM_IDLE_PROCESSES=${NUM_IDLE_PROCESSES:-0}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./app.py:/app/app.py:ro                       # our worker, over Reddie's
+      - ${AURIX_KIT:-/home/hg/aurix-kit}/voices:/app/voices:ro
+      - ${AURIX_KIT:-/home/hg/aurix-kit}/voice_designs.json:/app/voice_designs.json:ro
+      - /home/hg/.cache:/host-cache                   # shared model downloads (HF, whisper)
+      - whisper_cache:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    depends_on: [livekit]
+    restart: unless-stopped
+    networks: [voice-net]
+
+volumes:
+  whisper_cache:
+
+networks:
+  voice-net:
+    driver: bridge

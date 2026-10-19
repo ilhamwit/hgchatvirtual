@@ -121,6 +121,7 @@
         <div style="flex:1"><div class="ch-name" id="chName">Dave</div><div class="ch-role" id="chRole">Relationship Manager · Online</div></div>
         <div class="protected-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Percakapan privat</div>
         <div class="ch-acts">
+          <button class="ch-act voice" id="voiceBtn" type="button" onclick="voiceStart()" title="Mode suara — ngobrol dengan agent"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span>Suara</span></button>
           <button class="ch-act on" id="sockToggleBtn" onclick="toggleSockets()" title="Tampilkan/sembunyikan riwayat"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>
         </div>
       </div>
@@ -194,6 +195,8 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<!-- EPIC-016: full-screen voice call with the current agent -->
+<div class="vc hidden" id="voiceView" role="dialog" aria-modal="true" aria-label="Mode suara"></div>
 <!-- EPIC-011: session menu (right-click / ⋯), confirm dialog, file viewer -->
 <div class="ctx-menu hidden" id="ctxMenu" role="menu"></div>
 <div class="cfm hidden" id="confirmBox" role="dialog" aria-modal="true"></div>

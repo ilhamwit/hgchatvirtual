@@ -29,6 +29,7 @@ riwayat tersimpan di server, dan agent yang benar-benar membantu kerja tim.
 | [EPIC-013](EPIC-013-api-integration.md)                | Phase 2 | Integrasi API: agent WA membuat jadwal  | P1       | on-progress |
 | [EPIC-014](EPIC-014-settings.md)                       | Phase 2 | Settings: akun tim, API key, status      | P1       | ready-for-qa |
 | [EPIC-015](EPIC-015-reports.md)                        | Phase 2 | Reports: arsip laporan agent, mingguan   | P1       | ready-for-qa |
+| [EPIC-016](EPIC-016-voice-mode.md)                     | Phase 3 | Voice mode: ngobrol suara dengan agent   | P1       | on-progress |
 
 **Definition of MVP:** selesainya EPIC-000 → EPIC-002.
 
