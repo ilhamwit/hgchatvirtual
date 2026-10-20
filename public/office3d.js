@@ -48,7 +48,7 @@ function mount(stage, opts) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = daypart === 'night' ? 1.05 : 1.0;
+  renderer.toneMappingExposure = daypart === 'night' ? 0.95 : 0.88;   // warm and soft, not glaring white
   renderer.domElement.className = 'vo3-canvas';
   stage.appendChild(renderer.domElement);
   const ANISO = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -63,7 +63,7 @@ function mount(stage, opts) {
   const env = keep(pmrem.fromScene(new RoomEnvironment(), 0.04).texture);
   pmrem.dispose();
   scene.environment = env;
-  scene.environmentIntensity = daypart === 'night' ? 0.18 : 0.42;
+  scene.environmentIntensity = daypart === 'night' ? 0.14 : 0.26;
 
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -289,7 +289,7 @@ function mount(stage, opts) {
      (the agents work here), the lounge (three recliners around a glass chess
      table), the executive desk in front of the windows. */
   const marbleTex = canvasTex(1024, 1024, (g, w, h) => {
-    g.fillStyle = '#DCD5CA'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#DDCFBA'; g.fillRect(0, 0, w, h);   // warm cream marble
     const r = rng(61);
     for (let k = 0; k < 170; k++) { g.fillStyle = `rgba(${190 + r() * 40},${180 + r() * 35},${166 + r() * 30},${0.05 + r() * 0.07})`; g.beginPath(); g.ellipse(r() * w, r() * h, 40 + r() * 150, 20 + r() * 60, r() * Math.PI, 0, Math.PI * 2); g.fill(); }
     for (let k = 0; k < 28; k++) { g.strokeStyle = `rgba(${120 + r() * 40},${112 + r() * 30},${100 + r() * 30},${0.08 + r() * 0.14})`; g.lineWidth = 0.6 + r() * 1.8; let x = r() * w, y = r() * h; g.beginPath(); g.moveTo(x, y); for (let k2 = 0; k2 < 7; k2++) { x += (r() - 0.3) * 150; y += (r() - 0.5) * 90; g.lineTo(x, y); } g.stroke(); }
@@ -344,7 +344,7 @@ function mount(stage, opts) {
   }, { repeat: [2, 1] });
   Object.assign(M, {
     floor: std('marble', { map: marbleTex, roughness: 0.16, metalness: 0, envMapIntensity: 1.1 }),
-    wall: std('wallHG', { color: daypart === 'night' ? '#A09587' : '#BCAF9F', roughness: 0.92 }),
+    wall: std('wallHG', { color: daypart === 'night' ? '#9E8F7C' : '#B7A58F', roughness: 0.92 }),
     charcoal: std('charcoal', { color: '#3A3A3D', roughness: 0.85 }),
     fluted: std('fluted', { map: flutedTex, roughness: 0.45 }),
     walnutDark: std('walnutDark', { color: '#3A281C', roughness: 0.45 }),
@@ -364,7 +364,7 @@ function mount(stage, opts) {
   const leds = [];
   const mugMat = (c) => std('mug' + c, { color: c, roughness: 0.35 });
   const glassClear = keep(new THREE.MeshPhysicalMaterial({ color: '#E8F0F2', roughness: 0.04, transparent: true, opacity: 0.22, envMapIntensity: 1.4 }));
-  const ledMat = keep(new THREE.MeshStandardMaterial({ color: '#111', emissive: '#FFD9A3', emissiveIntensity: daypart === 'night' ? 2.4 : 1.6 }));
+  const ledMat = keep(new THREE.MeshStandardMaterial({ color: '#111', emissive: '#FFB866', emissiveIntensity: daypart === 'night' ? 2.6 : 2.0 }));
 
   /* floor and walls (layout: the owner's "hgfix" plan) */
   const floor = shadow(new THREE.Mesh(keep(new THREE.PlaneGeometry(W, D)), M.floor), false, true);
@@ -519,10 +519,10 @@ function mount(stage, opts) {
   ringOut.holes.push(ringIn);
   const pendant = shadow(new THREE.Mesh(keep(new THREE.ExtrudeGeometry(ringOut, { depth: 0.07, bevelEnabled: false, curveSegments: 16 })), M.alu), true, false);
   pendant.rotation.x = -Math.PI / 2; pendant.position.set(CT.x, 2.32, CT.z); scene.add(pendant);
-  const pLed = new THREE.Mesh(keep(new THREE.ShapeGeometry(ringOut, 16)), keep(new THREE.MeshBasicMaterial({ color: '#FFF1D6', toneMapped: false, side: THREE.DoubleSide })));
+  const pLed = new THREE.Mesh(keep(new THREE.ShapeGeometry(ringOut, 16)), keep(new THREE.MeshBasicMaterial({ color: '#FFC77D', toneMapped: false, side: THREE.DoubleSide })));
   pLed.rotation.x = -Math.PI / 2; pLed.position.set(CT.x, 2.318, CT.z); scene.add(pLed);
   for (const [wx, wz] of [[-0.9, -0.3], [0.9, -0.3], [-0.9, 0.3], [0.9, 0.3]]) cyl(0.003, 0.003, H - 2.39, M.steel, CT.x + wx, 2.39 + (H - 2.39) / 2, CT.z + wz, 4);
-  const pendantLight = new THREE.PointLight('#FFE6C4', daypart === 'night' ? 7 : 4, 6, 2); pendantLight.position.set(CT.x, 2.1, CT.z); scene.add(pendantLight);
+  const pendantLight = new THREE.PointLight('#FFB866', daypart === 'night' ? 9 : 6, 6.5, 2); pendantLight.position.set(CT.x, 2.1, CT.z); scene.add(pendantLight);
   function meshChair(x, z, facing, white = false) {
     const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = facing; scene.add(g);
     officeChairStyled(g, white);
@@ -825,10 +825,10 @@ function mount(stage, opts) {
   people.set('aurix', { g: robot, ring: aRing, p: null, tagEl: aTagEl, bubEl: aBubEl, busy: false, talk: false, hot: false, said: 0, phase: 0 });
 
   /* ── lights ── */
-  const hemi = new THREE.HemisphereLight(daypart === 'night' ? '#38415E' : '#EAF2FF', daypart === 'night' ? '#2A2420' : '#B79A78', daypart === 'night' ? 0.55 : 1.1);
+  const hemi = new THREE.HemisphereLight(daypart === 'night' ? '#5A4A3A' : '#FFDDAE', daypart === 'night' ? '#2A2018' : '#7A5C40', daypart === 'night' ? 0.45 : 0.7);
   scene.add(hemi);
   // soft "ceiling" light from above the open front: grounds everything with shadows
-  const key = new THREE.DirectionalLight(daypart === 'night' ? '#FFE2BD' : '#FFF6EA', daypart === 'night' ? 0.9 : 1.5);
+  const key = new THREE.DirectionalLight(daypart === 'night' ? '#FFC98E' : '#FFD7A3', daypart === 'night' ? 0.7 : 1.05);
   key.position.set(5, 11, 7); key.target.position.set(0, 0, 0); scene.add(key, key.target);
   key.castShadow = true;
   key.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048);
@@ -836,12 +836,27 @@ function mount(stage, opts) {
   key.shadow.bias = -0.0004; key.shadow.normalBias = 0.025; key.shadow.radius = 4;
   // the sun, low behind the back wall: it only reaches the floor through the window
   if (daypart !== 'night') {
-    const sun = new THREE.DirectionalLight(daypart === 'dusk' ? '#FFB27A' : '#FFF3DC', daypart === 'dusk' ? 2.2 : 3.0);
+    const sun = new THREE.DirectionalLight(daypart === 'dusk' ? '#FFA860' : '#FFDDB0', daypart === 'dusk' ? 1.8 : 2.0);
     sun.position.set(-2.2, 4.6, -19); sun.target.position.set(-0.3, 0, -2.2); scene.add(sun, sun.target);   // in through the window wall
     sun.castShadow = !mobile;
     sun.shadow.mapSize.set(1024, 1024);
     Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 8, bottom: -8, near: 3, far: 40 });
     sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03;
+  }
+
+  // cove lighting: a warm LED line along the top of the walls, and warm downlights
+  // over the conference table, the lounge and the executive desk (as in the photos)
+  const coveMat = keep(new THREE.MeshBasicMaterial({ color: '#FFC27A', toneMapped: false }));
+  const coveBack = new THREE.Mesh(keep(new THREE.BoxGeometry(W - 0.2, 0.035, 0.035)), coveMat); coveBack.position.set(0, H - 0.08, Z0 + 0.04); scene.add(coveBack);
+  const coveLeft = new THREE.Mesh(keep(new THREE.BoxGeometry(0.035, 0.035, D - 0.2)), coveMat); coveLeft.position.set(X0 + 0.04, H - 0.08, 0); scene.add(coveLeft);
+  // few lights on a phone: every point light costs on every pixel
+  const downs = mobile ? [[CT.x, CT.z], [LC.x, LC.z], [ED.x, ED.z]] : [[CT.x - 1.2, CT.z], [CT.x + 1.2, CT.z], [LC.x, LC.z], [ED.x, ED.z], [X0 + 1.2, cczc]];
+  for (const [dx, dz] of downs) {
+    const l = new THREE.PointLight('#FFB45E', daypart === 'night' ? 6.5 : 4.2, 6.5, 2); l.position.set(dx, H - 0.25, dz); scene.add(l);
+  }
+  // a soft warm wash on the walls from the cove line
+  for (const [lx, lz] of mobile ? [] : [[X0 + 0.6, 0.5], [X0 + 0.6, 4.5], [0.4, Z0 + 0.6]]) {
+    const l = new THREE.PointLight('#FFB866', daypart === 'night' ? 3.2 : 2.0, 3.5, 2); l.position.set(lx, H - 0.35, lz); scene.add(l);
   }
 
   /* ── camera ── */

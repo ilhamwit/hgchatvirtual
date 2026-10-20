@@ -112,3 +112,11 @@ test('Aurix under control: click him, then the floor; A* around furniture, smoot
   assert.match(src, /if \(VO\.three && VO\.three\.isAurixSelected\(\)\) \{ VO\.three\.aurixSelect\(false\); return; \}/, 'Esc lets go first');
   assert.match(src, /id="voAurixBar"/);
 });
+
+test('warm yellow lighting: softer exposure, warm lights, cove line, few lights on a phone', () => {
+  const three = fs.readFileSync(path.join(__dirname, '..', 'public', 'office3d.js'), 'utf8');
+  assert.match(three, /renderer\.toneMappingExposure = daypart === 'night' \? 0\.95 : 0\.88;/);
+  assert.match(three, /const coveMat = keep\(new THREE\.MeshBasicMaterial\(\{ color: '#FFC27A'/, 'warm cove line');
+  assert.match(three, /new THREE\.PointLight\('#FFB45E'/, 'warm downlights');
+  assert.match(three, /const downs = mobile \? \[\[CT\.x, CT\.z\], \[LC\.x, LC\.z\], \[ED\.x, ED\.z\]\]/, 'three lights on a phone');
+});

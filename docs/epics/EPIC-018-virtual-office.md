@@ -155,6 +155,12 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   berjalan dari pojok CCTV lewat lorong belakang dan kanan ke dekat pintu masuk. Grid
   jalan kini per benda (bukan per grup) sehingga ruang kosong di dalam grup tetap bisa
   dilewati. Kursi putih di ujung meja sebelumnya menghadap keluar; diperbaiki.
+- 2026-10-20 Pemilik: "vibes lampu kuning, jangan terlalu putih terang benderang".
+  Exposure 0,88 (malam 0,95), pantulan lingkungan diredam, hemisphere/key/matahari ke
+  warna hangat, marmer krem & dinding lebih hangat, LED lemari & cincin lampu ke kuning.
+  Ditambah garis lampu tersembunyi (cove) kuning di atas dinding, downlight kuning di atas
+  meja rapat, lounge, meja eksekutif, CCTV, dan lampu sorot dinding (desktop). Ponsel hanya
+  3 lampu titik supaya tetap ringan. Tes 158/158.
 
 ## Dependencies
 
