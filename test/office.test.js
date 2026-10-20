@@ -120,3 +120,13 @@ test('warm yellow lighting: softer exposure, warm lights, cove line, few lights 
   assert.match(three, /new THREE\.PointLight\('#FFB45E'/, 'warm downlights');
   assert.match(three, /const downs = mobile \? \[\[CT\.x, CT\.z\], \[LC\.x, LC\.z\], \[ED\.x, ED\.z\]\]/, 'three lights on a phone');
 });
+
+test('executive desk follows the photos: chevron L with a prow, ribbed wing, guest chairs; contact shadows', () => {
+  const three = fs.readFileSync(path.join(__dirname, '..', 'public', 'office3d.js'), 'utf8');
+  for (const bit of ['book-matched oak', "the prow's fascia: a ruled sweep", 'the dark leg under the tip by the CCTV',
+    'the cabinet and the wing on one ribbed base', 'a curved gaming monitor', 'the microscope by the windows',
+    'walnut shell guest chairs with cream cushions', 'soft contact shadows']) assert.ok(three.includes(bit), bit);
+  assert.match(three, /exec\.rotation\.y = Math\.PI; eg\.add\(exec\);/, 'the chair faces the room, back to the windows');
+  assert.match(three, /alphaMap: contactTex/, 'contact shadows are see-through basic material (the walk grid skips them)');
+  assert.match(three, /const AURIX_AT = \[-3\.3, -2\.0\];/, 'Aurix stands clear of the guest chairs');
+});

@@ -8,7 +8,7 @@ area: Frontend
 retries: 0
 prd: ../product/PRD.md
 stories: US-VO-1 … US-VO-2
-tasks: T-107 … T-115
+tasks: T-107 … T-116
 
 ## Goal
 
@@ -86,6 +86,14 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   dinding panjang, dua sofa 3 dudukan, meja marmer hitam, Iron Man di meja samping); meja
   eksekutif di pojok CCTV/jendela (kursi eksekutif, 3 kursi tamu walnut, bunga merah). Lantai
   marmer terang mengilap. Aurix berdiri dekat CCTV.
+- T-116 Meja eksekutif di depan CCTV mirip foto (11.50.18/19, 11.54.40): meja L berlapis
+  veneer oak motif chevron (bertemu di garis tengah), ujung bulat di sisi CCTV di atas kaki
+  gelap, "haluan" di tengah yang menyapu turun ke kaki sempit, lemari bulat dengan list
+  perunggu, sayap panjang ke arah jendela di atas alas bergaris vertikal + plinth perunggu.
+  Di sayap: monitor lengkung bercangkang putih, all-in-one perak, monitor kecil, mikroskop,
+  laptop. Kursi eksekutif membelakangi jendela; tiga kursi tamu walnut bercangkang dengan
+  bantalan krem (lubang di sandaran). Realisme: bayangan kontak lembut di bawah meja, sofa,
+  meja, kredensa. Jalur jalan Aurix tetap tersambung (antara kursi tamu dan sofa).
 
 ## Acceptance Criteria
 
@@ -161,6 +169,13 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   Ditambah garis lampu tersembunyi (cove) kuning di atas dinding, downlight kuning di atas
   meja rapat, lounge, meja eksekutif, CCTV, dan lampu sorot dinding (desktop). Ponsel hanya
   3 lampu titik supaya tetap ringan. Tes 158/158.
+
+- 2026-10-20 Pemilik: "meja yang depan cctv kurang mirip dengan referensi", ingin lebih
+  realistis. T-116 dibangun dan dicek dengan tangkapan layar (Chromium headless +
+  SwiftShader, instance uji dengan DB kosong): tampak depan & samping mirip foto. Aurix
+  dipindah ke (-3,3; -2,0) agar tidak menabrak kursi tamu; posisi tersimpan yang kini
+  terhalang otomatis diabaikan. GTAO (ambient occlusion pascaproses) sengaja tidak dipakai:
+  berat di ponsel; diganti bayangan kontak.
 
 ## Dependencies
 
