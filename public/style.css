@@ -1578,3 +1578,11 @@ img.ds-avi{object-fit:cover;background:#F4F4F8;border:1.5px solid rgba(201,168,7
   .vo-ctlbar span{flex:1 1 60%;}
   .vo.chatting .vo-ctlbar{left:10px;}
 }
+@media (max-width:760px){
+  /* phones: agents' tags shrink to their faces; the name shows when touched or talking */
+  .vo3-tag{padding:2px;gap:0;}
+  .vo3-tag img{width:22px;height:22px;}
+  .vo3-tag span{display:none;}
+  .vo3-tag.hot{padding:2px 9px 2px 2px;gap:5px;}
+  .vo3-tag.hot span{display:inline;}
+}

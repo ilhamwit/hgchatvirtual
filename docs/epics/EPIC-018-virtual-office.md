@@ -8,7 +8,7 @@ area: Frontend
 retries: 0
 prd: ../product/PRD.md
 stories: US-VO-1 … US-VO-2
-tasks: T-107 … T-114
+tasks: T-107 … T-115
 
 ## Goal
 
@@ -74,6 +74,18 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   halus, langkah kaki dari sendi pinggul, ayunan lengan, sedikit memantul. Tujuan yang
   tertutup furnitur → sel kosong terdekat. Posisi disimpan di browser (localStorage).
   Esc pertama melepas kontrol. Chip Aurix tetap membuka daftar grup.
+- T-115 Denah mengikuti kantor HG sungguhan (pemilik: foto di `~/Desktop/HGOffice`,
+  denah final `~/Desktop/hgfix.jpg`). Ruangan 8,4 × 13 m. Dinding panjang (kiri), dari
+  belakang ke depan: video wall CCTV 2×3 di atas kredensa (printer), kaca buram biru,
+  panel saklar + jam, pintu kayu ganda dengan logo HG, TV di antara lemari pajang
+  berlampu berisi figur koleksi + kredensa hitam bergaris emas. Dinding belakang: jendela
+  kaca penuh dengan tirai motif pohon, pilar dengan Iron Man di atas alas. Depan: dinding
+  bilah kayu (dipotong rendah). Kanan: dinding rendah dengan pintu kaca masuk. Zona: meja
+  rapat kayu gelap bentuk perahu di depan TV (10 kursi mesh + kursi putih di ujung, lampu
+  cincin), agent duduk di meja rapat dengan laptop; lounge di tengah (sofa 2 dudukan dekat
+  dinding panjang, dua sofa 3 dudukan, meja marmer hitam, Iron Man di meja samping); meja
+  eksekutif di pojok CCTV/jendela (kursi eksekutif, 3 kursi tamu walnut, bunga merah). Lantai
+  marmer terang mengilap. Aurix berdiri dekat CCTV.
 
 ## Acceptance Criteria
 
@@ -139,6 +151,10 @@ tersambung), jadi bentuknya mengikuti gaya "AI agents virtual office" isometrik.
   kosong terdekat, posisi tersimpan. Cincin lantai dan glow layar tidak dihitung
   sebagai penghalang (sebelumnya menutup lorong antar meja). dt per frame dibatasi
   0,1 dtk supaya perangkat lambat tetap berjalan dengan kecepatan nyata.
+- 2026-10-20 T-115 dibangun dan dicek di instance uji: tampilan sesuai hgfix; Aurix
+  berjalan dari pojok CCTV lewat lorong belakang dan kanan ke dekat pintu masuk. Grid
+  jalan kini per benda (bukan per grup) sehingga ruang kosong di dalam grup tetap bisa
+  dilewati. Kursi putih di ujung meja sebelumnya menghadap keluar; diperbaiki.
 
 ## Dependencies
 

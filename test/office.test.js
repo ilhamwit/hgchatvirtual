@@ -89,13 +89,15 @@ test('three.js office: vendored three 0.170.0 via the import map, loaded lazily,
   assert.ok(!/https?:\/\//.test(three.replace(/\/\/[^\n]*/g, '')), 'no network URLs in the scene code');
 });
 
-test('3D office: one black suit for everyone, meeting chairs face the table, room details', () => {
+test('3D office follows the HG plan (hgfix): long wall, window wall, three zones; one black suit for all', () => {
   const three = fs.readFileSync(path.join(__dirname, '..', 'public', 'office3d.js'), 'utf8');
-  assert.match(three, /const shirt = M\.suit;/, 'jacket and sleeves are the shared black suit');
-  assert.match(three, /suit: std\('suit', \{ color: '#17181C'/);
-  assert.match(three, /tie: std\('tie', \{ color: '#0B0B0D'/);
-  assert.match(three, /meetChair\(3\.57 \+ dx, 0\.55, Math\.PI\); meetChair\(3\.57 \+ dx, 2\.17, 0\);/, 'backrests away from the table');
-  for (const bit of ['window blinds', 'lounge corner', 'presentation TV', 'water dispenser', 'printer on a low cabinet', 'air conditioner', 'framed art', 'acoustic privacy panel']) assert.ok(three.includes(bit), bit);
+  assert.match(three, /const W = 8\.4, D = 13, H = 3;/, 'the long wall is 13 m, the window wall 8.4 m');
+  for (const bit of ['CCTV video wall over a credenza', 'frosted glass panel', 'double wood door with the HG logo above', 'TV between lit display shelves',
+    'floor-to-ceiling windows', 'conference table in front of the TV', 'pendant ring', 'lounge in the middle', 'black marble',
+    'executive desk at the CCTV / window corner', 'glass entrance door', 'Iron Man on a pedestal', 'fluted-wood wall']) assert.ok(three.includes(bit), bit);
+  assert.match(three, /const shirt = M\.suit;/, 'one black suit for everyone');
+  assert.match(three, /meshChair\(CT\.x \+ CT\.len \/ 2 \+ 0\.42, CT\.z, Math\.PI \/ 2, true\);/, 'the white chair at the head faces the table');
+  assert.match(three, /every solid piece blocks its own footprint/, 'the walk grid is per piece, not per group');
 });
 
 test('Aurix under control: click him, then the floor; A* around furniture, smooth walk, Esc lets go', () => {
