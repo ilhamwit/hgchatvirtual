@@ -28,3 +28,8 @@ npm-debug.log*
 # Voice engine (EPIC-016): generated keys/config live next to the compose file
 deploy/voice/livekit.yaml
 __pycache__/
+
+# Local tool state (claude-flow + proven-config markers)
+.claude-flow/
+.claude/proven-config.json
+.claude/.proven-config-version
